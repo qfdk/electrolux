@@ -525,6 +525,93 @@ body {
     font-size: 0.9rem;
 }
 
+/* Token Section */
+.token-info {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.token-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(29, 161, 242, 0.1);
+}
+
+.token-item:last-child {
+    border-bottom: none;
+}
+
+.token-label {
+    font-size: 0.9rem;
+    color: #6b7280;
+    font-weight: 500;
+    min-width: 80px;
+}
+
+.token-status {
+    font-size: 0.9rem;
+    font-weight: 600;
+    text-align: right;
+}
+
+.token-status.valid {
+    color: #10b981;
+}
+
+.token-status.invalid {
+    color: #ef4444;
+}
+
+.token-status.warning {
+    color: #f59e0b;
+}
+
+.token-status.info {
+    color: #1DA1F2;
+}
+
+.token-actions {
+    padding-top: 15px;
+    border-top: 1px solid rgba(29, 161, 242, 0.1);
+}
+
+.token-refresh-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 20px;
+    border: 2px solid #1DA1F2;
+    border-radius: 12px;
+    background: white;
+    color: #1DA1F2;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-size: 0.9rem;
+    font-weight: 600;
+    width: 100%;
+    justify-content: center;
+}
+
+.token-refresh-btn:hover:not(:disabled) {
+    background: #1DA1F2;
+    color: white;
+    transform: translateY(-2px);
+}
+
+.token-refresh-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.token-refresh-btn i {
+    font-size: 1rem;
+}
+
 /* Status Section */
 .status-grid {
     display: grid;
@@ -692,6 +779,16 @@ body {
     
     .status-grid {
         grid-template-columns: 1fr;
+    }
+    
+    .token-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+    }
+    
+    .token-status {
+        text-align: left;
     }
     
     .error-container, .success-container {

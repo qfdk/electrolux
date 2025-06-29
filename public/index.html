@@ -172,6 +172,47 @@
                 </div>
             </section>
 
+            <!-- Token Status -->
+            <section class="token-section">
+                <div class="card">
+                    <div class="card-header">
+                        <i class="fas fa-key"></i>
+                        <h2>Token状态</h2>
+                        <button class="refresh-btn" id="refreshTokenStatus" title="刷新Token状态">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
+                    </div>
+                    <div class="token-info">
+                        <div class="token-item">
+                            <span class="token-label">访问令牌:</span>
+                            <span class="token-status" id="accessTokenStatus">检查中...</span>
+                        </div>
+                        <div class="token-item">
+                            <span class="token-label">刷新令牌:</span>
+                            <span class="token-status" id="refreshTokenStatus">检查中...</span>
+                        </div>
+                        <div class="token-item">
+                            <span class="token-label">到期时间:</span>
+                            <span class="token-status" id="tokenExpiry">检查中...</span>
+                        </div>
+                        <div class="token-item">
+                            <span class="token-label">剩余时间:</span>
+                            <span class="token-status" id="tokenTimeLeft">检查中...</span>
+                        </div>
+                        <div class="token-item">
+                            <span class="token-label">API状态:</span>
+                            <span class="token-status" id="apiStatus">检查中...</span>
+                        </div>
+                    </div>
+                    <div class="token-actions">
+                        <button class="token-refresh-btn" id="manualRefreshToken" disabled>
+                            <i class="fas fa-redo"></i>
+                            <span>手动刷新Token</span>
+                        </button>
+                    </div>
+                </div>
+            </section>
+
             <!-- Status Display -->
             <section class="status-section">
                 <div class="card">

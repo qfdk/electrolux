@@ -16,6 +16,7 @@ class ElectroluxController {
   async init() {
     this.bindEvents();
     await this.checkConnection();
+    await this.refreshTokenStatus();
     await this.loadAppliances();
     this.startPeriodicUpdates();
   }
@@ -78,6 +79,16 @@ class ElectroluxController {
     // Status refresh
     document.getElementById('refreshStatus').addEventListener('click', () => {
       this.refreshStatus();
+    });
+
+    // Token status refresh
+    document.getElementById('refreshTokenStatus').addEventListener('click', () => {
+      this.refreshTokenStatus();
+    });
+
+    // Manual token refresh
+    document.getElementById('manualRefreshToken').addEventListener('click', () => {
+      this.manualRefreshToken();
     });
 
     // Debug: Add capabilities check
@@ -829,6 +840,140 @@ class ElectroluxController {
     setInterval(() => {
       this.checkConnection();
     }, 30000);
+
+    // Check token status every 5 minutes
+    setInterval(() => {
+      this.refreshTokenStatus(false);
+    }, 300000);
+  }
+
+  async refreshTokenStatus(showMessage = true) {
+    if (showMessage) this.showLoading('检查Token状态...');
+
+    try {
+      const response = await electroluxClient.getTokenStatus();
+      const tokenData = response.data;
+      
+      this.updateTokenStatusDisplay(tokenData);
+      
+      if (showMessage) this.showSuccess('Token状态已更新');
+    } catch (error) {
+      console.error('Failed to refresh token status:', error);
+      this.updateTokenStatusDisplay(null);
+      if (showMessage) this.showError('检查Token状态失败: ' + error.message);
+    } finally {
+      if (showMessage) this.hideLoading();
+    }
+  }
+
+  updateTokenStatusDisplay(tokenData) {
+    const accessTokenStatus = document.getElementById('accessTokenStatus');
+    const refreshTokenStatus = document.getElementById('refreshTokenStatus');
+    const tokenExpiry = document.getElementById('tokenExpiry');
+    const tokenTimeLeft = document.getElementById('tokenTimeLeft');
+    const apiStatus = document.getElementById('apiStatus');
+    const manualRefreshBtn = document.getElementById('manualRefreshToken');
+
+    if (!tokenData) {
+      // Error state
+      accessTokenStatus.textContent = '检查失败';
+      accessTokenStatus.className = 'token-status invalid';
+      
+      refreshTokenStatus.textContent = '检查失败';
+      refreshTokenStatus.className = 'token-status invalid';
+      
+      tokenExpiry.textContent = '未知';
+      tokenExpiry.className = 'token-status invalid';
+      
+      tokenTimeLeft.textContent = '未知';
+      tokenTimeLeft.className = 'token-status invalid';
+      
+      apiStatus.textContent = '不可用';
+      apiStatus.className = 'token-status invalid';
+      
+      manualRefreshBtn.disabled = true;
+      return;
+    }
+
+    // Access token status
+    if (tokenData.hasAccessToken) {
+      accessTokenStatus.textContent = tokenData.isExpired ? '已过期' : '有效';
+      accessTokenStatus.className = `token-status ${tokenData.isExpired ? 'invalid' : 'valid'}`;
+    } else {
+      accessTokenStatus.textContent = '缺失';
+      accessTokenStatus.className = 'token-status invalid';
+    }
+
+    // Refresh token status
+    if (tokenData.hasRefreshToken) {
+      refreshTokenStatus.textContent = '有效';
+      refreshTokenStatus.className = 'token-status valid';
+    } else {
+      refreshTokenStatus.textContent = '缺失';
+      refreshTokenStatus.className = 'token-status invalid';
+    }
+
+    // Token expiry
+    if (tokenData.tokenExpiry) {
+      const expiryDate = new Date(tokenData.tokenExpiry);
+      tokenExpiry.textContent = expiryDate.toLocaleString('zh-CN');
+      tokenExpiry.className = `token-status ${tokenData.isExpired ? 'invalid' : 'info'}`;
+    } else {
+      tokenExpiry.textContent = '未知';
+      tokenExpiry.className = 'token-status warning';
+    }
+
+    // Time left
+    if (tokenData.expiresInMinutes !== null) {
+      if (tokenData.expiresInMinutes <= 0) {
+        tokenTimeLeft.textContent = '已过期';
+        tokenTimeLeft.className = 'token-status invalid';
+      } else if (tokenData.expiresInMinutes < 30) {
+        tokenTimeLeft.textContent = `${tokenData.expiresInMinutes}分钟`;
+        tokenTimeLeft.className = 'token-status warning';
+      } else {
+        const hours = Math.floor(tokenData.expiresInMinutes / 60);
+        const minutes = tokenData.expiresInMinutes % 60;
+        const timeText = hours > 0 ? `${hours}小时${minutes}分钟` : `${minutes}分钟`;
+        tokenTimeLeft.textContent = timeText;
+        tokenTimeLeft.className = 'token-status valid';
+      }
+    } else {
+      tokenTimeLeft.textContent = '未知';
+      tokenTimeLeft.className = 'token-status warning';
+    }
+
+    // API status
+    if (tokenData.apiInitialized) {
+      apiStatus.textContent = '就绪';
+      apiStatus.className = 'token-status valid';
+    } else {
+      apiStatus.textContent = '未初始化';
+      apiStatus.className = 'token-status invalid';
+    }
+
+    // Manual refresh button
+    manualRefreshBtn.disabled = !tokenData.hasRefreshToken || !tokenData.apiInitialized;
+  }
+
+  async manualRefreshToken() {
+    this.showLoading('刷新Token...');
+
+    try {
+      const response = await electroluxClient.refreshToken();
+      this.showSuccess('Token刷新成功');
+      
+      // Refresh token status display
+      setTimeout(() => {
+        this.refreshTokenStatus(false);
+      }, 1000);
+      
+    } catch (error) {
+      console.error('Manual token refresh failed:', error);
+      this.showError('Token刷新失败: ' + error.message);
+    } finally {
+      this.hideLoading();
+    }
   }
 
   // UI helpers
