@@ -125,6 +125,7 @@ class ElectroluxClient {
 
   static formatMode(mode) {
     // Based on actual API info response
+    const modeUpper = typeof mode === 'string' ? mode.toUpperCase() : mode;
     const modeLabels = {
       'OFF': '关机',
       'AUTO': '自动',
@@ -132,22 +133,25 @@ class ElectroluxClient {
       'DRY': '除湿',
       'FANONLY': '送风'
     };
-    return modeLabels[mode] || mode || '--';
+    return modeLabels[modeUpper] || mode || '--';
   }
 
   static formatFanSpeed(speed) {
+    const speedUpper = typeof speed === 'string' ? speed.toUpperCase() : speed;
     const speedLabels = {
       'LOW': '低速',
       'MIDDLE': '中速',
       'HIGH': '高速',
       'AUTO': '自动'
     };
-    return speedLabels[speed] || speed || '--';
+    return speedLabels[speedUpper] || speed || '--';
   }
 
   static formatSwing(swing) {
-    if (swing === 'ON' || swing === true) return '开启';
-    if (swing === 'OFF' || swing === false) return '关闭';
+    // Handle both uppercase and lowercase values
+    const swingLower = typeof swing === 'string' ? swing.toLowerCase() : swing;
+    if (swingLower === 'on' || swing === true) return '开启';
+    if (swingLower === 'off' || swing === false) return '关闭';
     return '--';
   }
 
@@ -156,8 +160,10 @@ class ElectroluxClient {
   }
 
   static formatSleepMode(sleepMode) {
-    if (sleepMode === 'ON' || sleepMode === true) return '开启';
-    if (sleepMode === 'OFF' || sleepMode === false) return '关闭';
+    // Handle both uppercase and lowercase values
+    const modeLower = typeof sleepMode === 'string' ? sleepMode.toLowerCase() : sleepMode;
+    if (modeLower === 'on' || sleepMode === true) return '开启';
+    if (modeLower === 'off' || sleepMode === false) return '关闭';
     return '--';
   }
 

@@ -204,7 +204,7 @@ class ElectroluxController {
       // Ensure power button states are correct after enabling controls
       if (stateResponse.status === 'fulfilled') {
         const stateData = stateResponse.value.data;
-        const properties = stateData?.properties?.reported || {};
+        const properties = stateData?.properties?.reported || stateData || {};
         const applianceState = properties.applianceState;
         const actualPowerState = applianceState?.toLowerCase() === 'off' ? 'off' : 'running';
         this.updatePowerButtons(actualPowerState);
@@ -223,7 +223,8 @@ class ElectroluxController {
     this.currentState = state || {};
     
     // Extract properties from the actual API response structure
-    const properties = state?.properties?.reported || {};
+    // API returns data directly, not under properties.reported
+    const properties = state?.properties?.reported || state || {};
     
     // Always use Celsius temperature
     const currentTemp = properties.ambientTemperatureC;
@@ -405,7 +406,8 @@ class ElectroluxController {
 
   updateStatusDisplay(state) {
     // Extract properties from actual API response structure
-    const properties = state?.properties?.reported || {};
+    // API returns data directly, not under properties.reported
+    const properties = state?.properties?.reported || state || {};
     
     // Power status based on applianceState (the actual device state)
     const applianceState = properties.applianceState;
@@ -431,12 +433,20 @@ class ElectroluxController {
       properties.fanSpeedState ? ElectroluxClient.formatFanSpeed(properties.fanSpeedState) : '跟随设置';
     
     // Swing status - might not exist in all devices
-    document.getElementById('swingStatusDisplay').textContent = 
-      ElectroluxClient.formatSwing(properties.verticalSwing);
+    const swingStatusElement = document.getElementById('swingStatusDisplay');
+    const swingValue = properties.verticalSwing;
+    const isSwingOn = swingValue?.toLowerCase() === 'on' || swingValue === true;
+    swingStatusElement.textContent = ElectroluxClient.formatSwing(swingValue);
+    swingStatusElement.style.color = isSwingOn ? '#10b981' : '#6b7280';
+    swingStatusElement.style.fontWeight = 'bold';
     
     // Sleep mode status - confirmed in API example
-    document.getElementById('sleepModeStatus').textContent = 
-      ElectroluxClient.formatSleepMode(properties.sleepMode);
+    const sleepModeElement = document.getElementById('sleepModeStatus');
+    const sleepModeValue = properties.sleepMode;
+    const isSleepOn = sleepModeValue?.toLowerCase() === 'on' || sleepModeValue === true;
+    sleepModeElement.textContent = ElectroluxClient.formatSleepMode(sleepModeValue);
+    sleepModeElement.style.color = isSleepOn ? '#10b981' : '#6b7280';
+    sleepModeElement.style.fontWeight = 'bold';
     
     // Alert status
     document.getElementById('alertStatus').textContent = 
@@ -506,7 +516,7 @@ class ElectroluxController {
       }, '关机');
     } else {
       // For power on, use current device settings
-      const properties = this.currentState?.properties?.reported || {};
+      const properties = this.currentState?.properties?.reported || this.currentState || {};
       const currentMode = this.getCurrentDeviceMode();
       const currentTemp = properties.targetTemperatureC || this.targetTemperature;
       const currentFanSpeed = properties.fanSpeedSetting || 'AUTO';
@@ -545,7 +555,7 @@ class ElectroluxController {
 
   // Get current mode from device state
   getCurrentDeviceMode() {
-    const properties = this.currentState?.properties?.reported || {};
+    const properties = this.currentState?.properties?.reported || this.currentState || {};
     const currentMode = properties.mode;
     
     console.log('📋 Getting current device mode:', currentMode);
@@ -668,7 +678,7 @@ class ElectroluxController {
     while (Date.now() - startTime < timeout) {
       try {
         const state = await electroluxClient.getApplianceState(this.currentApplianceId);
-        const currentTemp = state.data?.properties?.reported?.targetTemperatureC;
+        const currentTemp = state.data?.properties?.reported?.targetTemperatureC || state.data?.targetTemperatureC;
         
         if (currentTemp === expectedTemp) {
           console.log(`✅ Temperature successfully changed to ${expectedTemp}°C`);
@@ -696,7 +706,7 @@ class ElectroluxController {
     try {
       // Get current device state and capabilities
       const currentState = await electroluxClient.getApplianceState(this.currentApplianceId);
-      const currentProperties = currentState.data?.properties?.reported || {};
+      const currentProperties = currentState.data?.properties?.reported || currentState.data || {};
       
       // Get fresh capabilities for the target mode
       const modeRestrictions = await this.getModeRestrictions(upperMode, true);
@@ -810,7 +820,7 @@ class ElectroluxController {
     while (Date.now() - startTime < timeout) {
       try {
         const state = await electroluxClient.getApplianceState(this.currentApplianceId);
-        const currentMode = state.data?.properties?.reported?.mode?.toUpperCase();
+        const currentMode = (state.data?.properties?.reported?.mode || state.data?.mode)?.toUpperCase();
         
         if (lastKnownMode !== currentMode) {
           console.log(`📱 Device mode is now: ${currentMode}`);
@@ -831,7 +841,7 @@ class ElectroluxController {
     
     // If we get here, the mode change didn't complete as expected
     const finalState = await electroluxClient.getApplianceState(this.currentApplianceId);
-    const finalMode = finalState.data?.properties?.reported?.mode?.toUpperCase();
+    const finalMode = (finalState.data?.properties?.reported?.mode || finalState.data?.mode)?.toUpperCase();
     
     if (finalMode !== expectedMode) {
       console.log(`⚠️ Mode change timeout. Expected: ${expectedMode}, Actual: ${finalMode}`);
@@ -1028,7 +1038,7 @@ class ElectroluxController {
     while (Date.now() - startTime < timeout) {
       try {
         const state = await electroluxClient.getApplianceState(this.currentApplianceId);
-        const currentSpeed = state.data?.properties?.reported?.fanSpeedSetting?.toUpperCase();
+        const currentSpeed = (state.data?.properties?.reported?.fanSpeedSetting || state.data?.fanSpeedSetting)?.toUpperCase();
         
         if (currentSpeed === expectedSpeed) {
           console.log(`✅ Fan speed successfully changed to ${expectedSpeed}`);
@@ -1052,6 +1062,12 @@ class ElectroluxController {
     await this.sendCommand({
       verticalSwing: this.isSwingOn ? 'ON' : 'OFF'
     }, `${this.isSwingOn ? '开启' : '关闭'}摆风`);
+    
+    // Also update status display immediately since API might not return verticalSwing
+    const swingStatusElement = document.getElementById('swingStatusDisplay');
+    swingStatusElement.textContent = this.isSwingOn ? '开启' : '关闭';
+    swingStatusElement.style.color = this.isSwingOn ? '#10b981' : '#6b7280';
+    swingStatusElement.style.fontWeight = 'bold';
   }
 
   async toggleSleepMode() {
@@ -1130,7 +1146,7 @@ class ElectroluxController {
         // 获取最新状态
         const response = await electroluxClient.getApplianceState(this.currentApplianceId);
         const newState = response.data;
-        const properties = newState?.properties?.reported || {};
+        const properties = newState?.properties?.reported || newState || {};
         
         // 检查是否发生了预期的状态变化
         if (this.hasStateChanged(properties, expectedChanges)) {
