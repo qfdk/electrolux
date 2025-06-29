@@ -4,6 +4,7 @@ const path = require('path');
 require('dotenv').config();
 
 const { ElectroluxAPI } = require('./lib/electrolux-api');
+const TokenStorage = require('./lib/token-storage');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -13,22 +14,79 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
 
-// Initialize Electrolux API client
-const electroluxAPI = new ElectroluxAPI(
-  process.env.ELECTROLUX_API_KEY,
-  process.env.ELECTROLUX_TOKEN,
-  process.env.ELECTROLUX_REFRESH_TOKEN
-);
+// Initialize token storage
+const tokenStorage = new TokenStorage();
+let electroluxAPI = null;
 
-// Set up token refresh callback
-electroluxAPI.setTokenRefreshCallback((newAccessToken, newRefreshToken) => {
-  console.log('🔄 Token refreshed, updating environment variables...');
-  process.env.ELECTROLUX_TOKEN = newAccessToken;
-  process.env.ELECTROLUX_REFRESH_TOKEN = newRefreshToken;
-  
-  // Note: In production, you might want to persist these to a file or database
-  console.log('⚠️ Important: New tokens are only stored in memory. Consider persisting them.');
-});
+// Initialize API client with token management
+async function initializeAPI() {
+  try {
+    // Load tokens from file first
+    await tokenStorage.loadTokens();
+    const storedTokens = tokenStorage.getTokens();
+    
+    // Use stored tokens if available, otherwise use environment variables
+    const accessToken = storedTokens.accessToken || process.env.ELECTROLUX_TOKEN;
+    const refreshToken = storedTokens.refreshToken || process.env.ELECTROLUX_REFRESH_TOKEN;
+    
+    if (!accessToken) {
+      throw new Error('No access token available in storage or environment');
+    }
+    
+    console.log('🔧 Initializing API client with stored tokens...');
+    electroluxAPI = new ElectroluxAPI(
+      process.env.ELECTROLUX_API_KEY,
+      accessToken,
+      refreshToken
+    );
+    
+    // Set token expiry if we have it from storage
+    if (storedTokens.expiryTime) {
+      const expiresIn = Math.max(0, Math.floor((storedTokens.expiryTime - Date.now()) / 1000));
+      electroluxAPI.setTokenExpiry(expiresIn);
+    }
+    
+    // Set up token refresh callback to save to file
+    electroluxAPI.setTokenRefreshCallback(async (newAccessToken, newRefreshToken, expiresIn) => {
+      console.log('🔄 Token refreshed, saving to file...');
+      try {
+        await tokenStorage.saveTokens(newAccessToken, newRefreshToken, expiresIn);
+        console.log('✅ New tokens saved to file successfully');
+      } catch (error) {
+        console.error('❌ Failed to save tokens to file:', error.message);
+      }
+    });
+    
+    console.log('✅ API client initialized successfully');
+    
+    // Log token status
+    const tokenInfo = tokenStorage.getTokenInfo();
+    console.log('📊 Token status:', {
+      hasTokens: tokenInfo.hasAccessToken && tokenInfo.hasRefreshToken,
+      expiresIn: tokenInfo.expiresInSeconds ? `${Math.floor(tokenInfo.expiresInSeconds / 60)} minutes` : 'unknown',
+      isExpired: tokenInfo.isExpired
+    });
+    
+  } catch (error) {
+    console.error('❌ Failed to initialize API client:', error.message);
+    throw error;
+  }
+}
+
+// Middleware to ensure API is initialized
+const ensureAPIInitialized = (req, res, next) => {
+  if (!electroluxAPI) {
+    return res.status(503).json({
+      success: false,
+      error: {
+        code: 'API_NOT_INITIALIZED',
+        message: 'API client not initialized yet',
+        details: 'Server is still starting up'
+      }
+    });
+  }
+  next();
+};
 
 // Routes
 app.get('/', (req, res) => {
@@ -36,7 +94,7 @@ app.get('/', (req, res) => {
 });
 
 // API Routes
-app.get('/api/appliances', async (req, res) => {
+app.get('/api/appliances', ensureAPIInitialized, async (req, res) => {
   try {
     const appliances = await electroluxAPI.getAppliances();
     res.json({ success: true, data: appliances, timestamp: new Date().toISOString() });
@@ -53,7 +111,7 @@ app.get('/api/appliances', async (req, res) => {
   }
 });
 
-app.get('/api/appliances/:id/info', async (req, res) => {
+app.get('/api/appliances/:id/info', ensureAPIInitialized, async (req, res) => {
   try {
     const info = await electroluxAPI.getApplianceInfo(req.params.id);
     res.json({ success: true, data: info, timestamp: new Date().toISOString() });
@@ -70,7 +128,7 @@ app.get('/api/appliances/:id/info', async (req, res) => {
   }
 });
 
-app.get('/api/appliances/:id/state', async (req, res) => {
+app.get('/api/appliances/:id/state', ensureAPIInitialized, async (req, res) => {
   try {
     const state = await electroluxAPI.getApplianceState(req.params.id);
     console.log('📊 State API response:', {
@@ -92,7 +150,7 @@ app.get('/api/appliances/:id/state', async (req, res) => {
   }
 });
 
-app.get('/api/appliances/:id/capabilities', async (req, res) => {
+app.get('/api/appliances/:id/capabilities', ensureAPIInitialized, async (req, res) => {
   try {
     const capabilities = await electroluxAPI.getApplianceCapabilities(req.params.id);
     res.json({ success: true, data: capabilities, timestamp: new Date().toISOString() });
@@ -109,7 +167,7 @@ app.get('/api/appliances/:id/capabilities', async (req, res) => {
   }
 });
 
-app.put('/api/appliances/:id/control', async (req, res) => {
+app.put('/api/appliances/:id/control', ensureAPIInitialized, async (req, res) => {
   try {
     console.log(`🎛️ Control request for appliance ${req.params.id}:`, req.body);
     const result = await electroluxAPI.controlAppliance(req.params.id, req.body);
@@ -140,25 +198,21 @@ app.get('/api/health', (req, res) => {
 
 // Token status endpoint
 app.get('/api/token/status', (req, res) => {
-  const hasToken = !!process.env.ELECTROLUX_TOKEN;
-  const hasRefreshToken = !!process.env.ELECTROLUX_REFRESH_TOKEN;
-  const expiryTime = electroluxAPI.tokenExpiryTime;
+  const tokenInfo = tokenStorage.getTokenInfo();
   
   res.json({
     success: true,
     data: {
-      hasToken,
-      hasRefreshToken,
-      tokenExpiry: expiryTime ? new Date(expiryTime).toISOString() : null,
-      isExpired: expiryTime ? Date.now() > expiryTime : null,
-      expiresInMinutes: expiryTime ? Math.max(0, Math.floor((expiryTime - Date.now()) / 60000)) : null
+      ...tokenInfo,
+      apiInitialized: !!electroluxAPI,
+      expiresInMinutes: tokenInfo.expiresInSeconds ? Math.floor(tokenInfo.expiresInSeconds / 60) : null
     },
     timestamp: new Date().toISOString()
   });
 });
 
 // Manual token refresh endpoint
-app.post('/api/token/refresh', async (req, res) => {
+app.post('/api/token/refresh', ensureAPIInitialized, async (req, res) => {
   try {
     await electroluxAPI.refreshAccessToken();
     res.json({
@@ -204,18 +258,17 @@ app.use('/api/*', (req, res) => {
   });
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`🌟 Electrolux AC Controller Server running on port ${PORT}`);
   console.log(`📱 Web interface: http://localhost:${PORT}`);
   console.log(`🔧 API health check: http://localhost:${PORT}/api/health`);
   
-  if (!process.env.ELECTROLUX_API_KEY || !process.env.ELECTROLUX_TOKEN) {
-    console.warn('⚠️  Warning: Missing ELECTROLUX_API_KEY or ELECTROLUX_TOKEN environment variables');
-  }
-  
-  if (!process.env.ELECTROLUX_REFRESH_TOKEN) {
-    console.warn('⚠️  Warning: Missing ELECTROLUX_REFRESH_TOKEN - automatic token refresh disabled');
-  } else {
-    console.log('✅ Refresh token available - automatic token refresh enabled');
+  // Initialize API client with token management
+  try {
+    await initializeAPI();
+  } catch (error) {
+    console.error('❌ Failed to initialize API client:', error.message);
+    console.warn('⚠️  Server started but API client is not available');
+    console.warn('   Check your tokens and try restarting the server');
   }
 });

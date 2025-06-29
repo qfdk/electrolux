@@ -11,6 +11,9 @@ yarn-error.log*
 .env.test.local
 .env.production.local
 
+# Token storage (contains sensitive data)
+.tokens.json
+
 # Runtime data
 pids
 *.pid
