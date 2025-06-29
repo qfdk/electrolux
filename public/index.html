@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Electrolux 空调遥控器</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <div class="logo">
+                <i class="fas fa-snowflake"></i>
+                <h1>Electrolux 空调控制器</h1>
+            </div>
+            <div class="connection-status" id="connectionStatus">
+                <span class="status-dot offline"></span>
+                <span class="status-text">连接中...</span>
+            </div>
+        </header>
+
+        <main class="main-content">
+            <!-- Device Selection -->
+            <section class="device-section">
+                <div class="card">
+                    <div class="card-header">
+                        <i class="fas fa-home"></i>
+                        <h2>设备选择</h2>
+                        <button class="refresh-btn" id="refreshDevices" title="刷新设备列表">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
+                    </div>
+                    <div class="device-selector">
+                        <select id="deviceSelect" disabled>
+                            <option value="">正在加载设备...</option>
+                        </select>
+                        <div class="device-info" id="deviceInfo" style="display: none;">
+                            <span class="device-name" id="deviceName"></span>
+                            <span class="device-status" id="deviceStatus"></span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Temperature Control -->
+            <section class="temperature-section">
+                <div class="card">
+                    <div class="card-header">
+                        <i class="fas fa-thermometer-half"></i>
+                        <h2>温度控制</h2>
+                    </div>
+                    <div class="temperature-display">
+                        <div class="temp-current">
+                            <label>当前温度</label>
+                            <div class="temp-value">
+                                <span id="currentTemp">--</span>
+                                <span class="temp-unit">°C</span>
+                            </div>
+                        </div>
+                        <div class="temp-target">
+                            <label>目标温度</label>
+                            <div class="temp-controls">
+                                <button class="temp-btn temp-down" id="tempDown" disabled>
+                                    <i class="fas fa-minus"></i>
+                                </button>
+                                <div class="temp-value">
+                                    <span id="targetTemp">24</span>
+                                    <span class="temp-unit" id="tempUnit">°C</span>
+                                </div>
+                                <button class="temp-btn temp-up" id="tempUp" disabled>
+                                    <i class="fas fa-plus"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Power Control -->
+            <section class="power-section">
+                <div class="card">
+                    <div class="card-header">
+                        <i class="fas fa-power-off"></i>
+                        <h2>电源控制</h2>
+                    </div>
+                    <div class="power-controls">
+                        <button class="power-btn off" id="powerOff" disabled>
+                            <i class="fas fa-power-off"></i>
+                            <span>关机</span>
+                        </button>
+                        <button class="power-btn on" id="powerOn" disabled>
+                            <i class="fas fa-play"></i>
+                            <span>开机</span>
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Mode Control -->
+            <section class="mode-section">
+                <div class="card">
+                    <div class="card-header">
+                        <i class="fas fa-cog"></i>
+                        <h2>运行模式</h2>
+                    </div>
+                    <div class="mode-grid">
+                        <button class="mode-btn" data-mode="AUTO" disabled>
+                            <i class="fas fa-magic"></i>
+                            <span>自动</span>
+                        </button>
+                        <button class="mode-btn" data-mode="COOL" disabled>
+                            <i class="fas fa-snowflake"></i>
+                            <span>制冷</span>
+                        </button>
+                        <button class="mode-btn" data-mode="DRY" disabled>
+                            <i class="fas fa-tint"></i>
+                            <span>除湿</span>
+                        </button>
+                        <button class="mode-btn" data-mode="FANONLY" disabled>
+                            <i class="fas fa-fan"></i>
+                            <span>送风</span>
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Fan Control -->
+            <section class="fan-section">
+                <div class="card">
+                    <div class="card-header">
+                        <i class="fas fa-wind"></i>
+                        <h2>风扇控制</h2>
+                    </div>
+                    <div class="fan-controls">
+                        <div class="fan-speed">
+                            <label>风扇速度</label>
+                            <div class="fan-speed-buttons">
+                                <button class="fan-btn" data-speed="LOW" disabled>
+                                    <i class="fas fa-wind" style="font-size: 12px;"></i>
+                                    <span>低速</span>
+                                </button>
+                                <button class="fan-btn" data-speed="MIDDLE" disabled>
+                                    <i class="fas fa-wind" style="font-size: 16px;"></i>
+                                    <span>中速</span>
+                                </button>
+                                <button class="fan-btn" data-speed="HIGH" disabled>
+                                    <i class="fas fa-wind" style="font-size: 20px;"></i>
+                                    <span>高速</span>
+                                </button>
+                                <button class="fan-btn" data-speed="AUTO" disabled>
+                                    <i class="fas fa-magic"></i>
+                                    <span>自动</span>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="swing-control">
+                            <label>摆风</label>
+                            <button class="swing-btn" id="swingToggle" disabled>
+                                <i class="fas fa-arrows-alt-v"></i>
+                                <span id="swingStatus">关闭</span>
+                            </button>
+                        </div>
+                        <div class="sleep-control">
+                            <label>睡眠模式</label>
+                            <button class="sleep-btn" id="sleepToggle" disabled>
+                                <i class="fas fa-moon"></i>
+                                <span id="sleepStatus">关闭</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Status Display -->
+            <section class="status-section">
+                <div class="card">
+                    <div class="card-header">
+                        <i class="fas fa-info-circle"></i>
+                        <h2>设备状态</h2>
+                        <button class="refresh-btn" id="refreshStatus" title="刷新状态">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
+                    </div>
+                    <div class="status-grid">
+                        <div class="status-item">
+                            <label>电源状态</label>
+                            <span id="powerStatus">--</span>
+                        </div>
+                        <div class="status-item">
+                            <label>运行模式</label>
+                            <span id="modeStatus">--</span>
+                        </div>
+                        <div class="status-item">
+                            <label>风扇设置</label>
+                            <span id="fanStatus">--</span>
+                        </div>
+                        <div class="status-item">
+                            <label>实际风速</label>
+                            <span id="fanStateStatus">--</span>
+                        </div>
+                        <div class="status-item">
+                            <label>摆风状态</label>
+                            <span id="swingStatusDisplay">--</span>
+                        </div>
+                        <div class="status-item">
+                            <label>睡眠模式</label>
+                            <span id="sleepModeStatus">--</span>
+                        </div>
+                        <div class="status-item">
+                            <label>连接状态</label>
+                            <span id="deviceConnectionStatus">--</span>
+                        </div>
+                        <div class="status-item">
+                            <label>最后更新</label>
+                            <span id="lastUpdate">--</span>
+                        </div>
+                        <div class="status-item">
+                            <label>告警状态</label>
+                            <span id="alertStatus">--</span>
+                        </div>
+                        <div class="status-item">
+                            <label>网络质量</label>
+                            <span id="networkQuality">--</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Alerts Section -->
+            <section class="alerts-section" id="alertsSection" style="display: none;">
+                <div class="card">
+                    <div class="card-header">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <h2>设备告警</h2>
+                        <button class="refresh-btn" id="refreshAlerts" title="刷新告警">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
+                    </div>
+                    <div class="alerts-container" id="alertsContainer">
+                        <div class="no-alerts">
+                            <i class="fas fa-check-circle"></i>
+                            <span>暂无告警</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Loading Overlay -->
+        <div class="loading-overlay" id="loadingOverlay" style="display: none;">
+            <div class="loading-spinner">
+                <i class="fas fa-spinner fa-spin"></i>
+                <p id="loadingText">处理中...</p>
+            </div>
+        </div>
+
+        <!-- Error Messages -->
+        <div class="error-container" id="errorContainer"></div>
+
+        <!-- Success Messages -->
+        <div class="success-container" id="successContainer"></div>
+    </div>
+
+    <footer class="footer">
+        <p>&copy; 2024 Electrolux AC Controller - Made with ❤️</p>
+        <p class="version">v1.0.0</p>
+    </footer>
+
+    <script src="api-client.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
