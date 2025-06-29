@@ -167,12 +167,19 @@ app.post('/api/appliances/:id/control', async (req, res) => { /* Control device 
 ## Environment Variables
 Required in `.env` file:
 ```env
-ELECTROLUX_API_KEY=a_41c696eb-045a-4edd-8f00-bb0bd11f0fc6
-ELECTROLUX_TOKEN=eyJraWQiOiIxMGZhMWQwOWY4YjM2OGFjYmE4YmRiNDYxOTFmZmVhODE1MmZiM2YzZjQ5N2RhZjk1OWFjNWIzNDM5ZDI3OGY0IiwiYWxnIjoiUlMyNTYiLCJ0eXAiOiJKV1QifQ...
-TEST_APPLIANCE_ID=950011716506019911110697
+ELECTROLUX_API_KEY=your_api_key_here
+ELECTROLUX_TOKEN=your_access_token_here
+ELECTROLUX_REFRESH_TOKEN=your_refresh_token_here
+TEST_APPLIANCE_ID=your_device_id_here
 PORT=3000
 NODE_ENV=development
 ```
+
+### Token Management
+- **ELECTROLUX_TOKEN**: JWT access token (expires after ~12 hours)
+- **ELECTROLUX_REFRESH_TOKEN**: Refresh token for automatic token renewal
+- **Automatic Refresh**: Tokens are automatically refreshed 5 minutes before expiry
+- **Manual Refresh**: Use `/api/token/refresh` endpoint to manually refresh tokens
 
 ## Frontend Requirements
 

@@ -16,8 +16,19 @@ app.use(express.static('public'));
 // Initialize Electrolux API client
 const electroluxAPI = new ElectroluxAPI(
   process.env.ELECTROLUX_API_KEY,
-  process.env.ELECTROLUX_TOKEN
+  process.env.ELECTROLUX_TOKEN,
+  process.env.ELECTROLUX_REFRESH_TOKEN
 );
+
+// Set up token refresh callback
+electroluxAPI.setTokenRefreshCallback((newAccessToken, newRefreshToken) => {
+  console.log('🔄 Token refreshed, updating environment variables...');
+  process.env.ELECTROLUX_TOKEN = newAccessToken;
+  process.env.ELECTROLUX_REFRESH_TOKEN = newRefreshToken;
+  
+  // Note: In production, you might want to persist these to a file or database
+  console.log('⚠️ Important: New tokens are only stored in memory. Consider persisting them.');
+});
 
 // Routes
 app.get('/', (req, res) => {
@@ -127,6 +138,47 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// Token status endpoint
+app.get('/api/token/status', (req, res) => {
+  const hasToken = !!process.env.ELECTROLUX_TOKEN;
+  const hasRefreshToken = !!process.env.ELECTROLUX_REFRESH_TOKEN;
+  const expiryTime = electroluxAPI.tokenExpiryTime;
+  
+  res.json({
+    success: true,
+    data: {
+      hasToken,
+      hasRefreshToken,
+      tokenExpiry: expiryTime ? new Date(expiryTime).toISOString() : null,
+      isExpired: expiryTime ? Date.now() > expiryTime : null,
+      expiresInMinutes: expiryTime ? Math.max(0, Math.floor((expiryTime - Date.now()) / 60000)) : null
+    },
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Manual token refresh endpoint
+app.post('/api/token/refresh', async (req, res) => {
+  try {
+    await electroluxAPI.refreshAccessToken();
+    res.json({
+      success: true,
+      message: 'Token refreshed successfully',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Manual token refresh failed:', error.message);
+    res.status(500).json({
+      success: false,
+      error: {
+        code: 'TOKEN_REFRESH_ERROR',
+        message: 'Failed to refresh token',
+        details: error.message
+      }
+    });
+  }
+});
+
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error('Unhandled error:', err);
@@ -159,5 +211,11 @@ app.listen(PORT, () => {
   
   if (!process.env.ELECTROLUX_API_KEY || !process.env.ELECTROLUX_TOKEN) {
     console.warn('⚠️  Warning: Missing ELECTROLUX_API_KEY or ELECTROLUX_TOKEN environment variables');
+  }
+  
+  if (!process.env.ELECTROLUX_REFRESH_TOKEN) {
+    console.warn('⚠️  Warning: Missing ELECTROLUX_REFRESH_TOKEN - automatic token refresh disabled');
+  } else {
+    console.log('✅ Refresh token available - automatic token refresh enabled');
   }
 });

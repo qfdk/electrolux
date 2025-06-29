@@ -67,6 +67,18 @@ class ElectroluxClient {
     return response;
   }
 
+  async getTokenStatus() {
+    const response = await this.request('/token/status');
+    return response;
+  }
+
+  async refreshToken() {
+    const response = await this.request('/token/refresh', {
+      method: 'POST'
+    });
+    return response;
+  }
+
 
   // Utility methods for command formatting
   static createTemperatureCommand(temperature, mode = null, fanSpeed = null, swing = null) {
