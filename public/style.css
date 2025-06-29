@@ -85,11 +85,25 @@ body {
     font-weight: 500;
 }
 
-/* Main content */
+/* Main content - improved grid layout */
 .main-content {
     display: grid;
-    gap: 25px;
-    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+    gap: 20px;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    align-items: start;
+}
+
+/* Responsive grid adjustments */
+@media (min-width: 768px) and (max-width: 1199px) {
+    .main-content {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (min-width: 1200px) {
+    .main-content {
+        grid-template-columns: repeat(3, 1fr);
+    }
 }
 
 /* Cards */
@@ -99,6 +113,33 @@ body {
     padding: 25px;
     border: 1px solid #e5e7eb;
     transition: transform 0.3s ease;
+    height: fit-content;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Card height groups for better visual balance */
+/* Group 1: Compact information cards */
+.device-section .card,
+.power-section .card,
+.alerts-section .card {
+    min-height: 140px;
+}
+
+/* Group 2: Medium interaction cards */
+.temperature-section .card,
+.mode-token-section .card {
+    min-height: 200px;
+}
+
+/* Group 3: Complex control cards */
+.fan-section .card {
+    min-height: 300px;
+}
+
+/* Group 4: Information display cards */
+.status-section .card {
+    min-height: 280px;
 }
 
 .card:hover {
@@ -112,6 +153,67 @@ body {
     margin-bottom: 20px;
     padding-bottom: 15px;
     border-bottom: 2px solid rgba(29, 161, 242, 0.1);
+    flex-shrink: 0;
+}
+
+/* Card content fills remaining space */
+.device-selector {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+}
+
+.temperature-display {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    align-content: start;
+}
+
+.power-controls {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+    align-content: center;
+}
+
+.mode-grid {
+    flex: 1;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 15px;
+    align-content: start;
+}
+
+.fan-controls {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 25px;
+    justify-content: flex-start;
+}
+
+.status-grid {
+    flex: 1;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 15px;
+    align-content: start;
+}
+
+.alerts-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    justify-content: flex-start;
+}
+
+.token-actions {
+    margin-top: auto;
 }
 
 .card-header i {
@@ -148,59 +250,49 @@ body {
     gap: 15px;
 }
 
-.device-selector select {
-    padding: 12px 16px;
-    border: 2px solid rgba(29, 161, 242, 0.2);
-    border-radius: 12px;
-    background: white;
-    font-size: 1rem;
-    color: #374151;
-    cursor: pointer;
-    transition: all 0.3s ease;
-}
-
-.device-selector select:focus {
-    outline: none;
-    border-color: #1DA1F2;
-}
 
 .device-info {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 12px 16px;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px;
     background: rgba(29, 161, 242, 0.05);
-    border-radius: 12px;
+    border-radius: 10px;
+    border: 1px solid rgba(29, 161, 242, 0.1);
 }
 
-.device-name {
+.device-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 0;
+}
+
+
+.device-label {
+    font-size: 0.9rem;
+    color: #6b7280;
+    font-weight: 500;
+    min-width: 80px;
+}
+
+.device-value {
+    font-size: 0.9rem;
     font-weight: 600;
+    text-align: right;
     color: #374151;
 }
 
-.device-status {
-    padding: 4px 12px;
-    border-radius: 20px;
-    font-size: 0.85rem;
-    font-weight: 500;
+.device-value.online {
+    color: #10b981;
 }
 
-.device-status.online {
-    background: #dcfce7;
-    color: #166534;
+.device-value.offline {
+    color: #ef4444;
 }
 
-.device-status.offline {
-    background: #fee2e2;
-    color: #991b1b;
-}
 
-/* Temperature Section */
-.temperature-display {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 20px;
-}
+/* Temperature Section - styles moved to card content section above */
 
 .temp-current, .temp-target {
     text-align: center;
@@ -265,12 +357,7 @@ body {
     cursor: not-allowed;
 }
 
-/* Power Control Section */
-.power-controls {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 15px;
-}
+/* Power Control Section - styles moved to card content section above */
 
 .power-btn {
     display: flex;
@@ -339,12 +426,7 @@ body {
     font-weight: 600;
 }
 
-/* Mode Section */
-.mode-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 15px;
-}
+/* Mode Section - styles moved to card content section above */
 
 .mode-btn {
     display: flex;
@@ -386,12 +468,7 @@ body {
     font-weight: 500;
 }
 
-/* Fan Section */
-.fan-controls {
-    display: flex;
-    flex-direction: column;
-    gap: 25px;
-}
+/* Fan Section - styles moved to card content section above */
 
 .fan-speed label, .swing-control label, .sleep-control label {
     display: block;
@@ -612,12 +689,45 @@ body {
     font-size: 1rem;
 }
 
-/* Status Section */
-.status-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 15px;
+.token-help {
+    margin-top: 15px;
+    padding: 12px;
+    background: #fef3cd;
+    border: 1px solid #ffeaa7;
+    border-radius: 8px;
+    animation: fadeIn 0.3s ease;
 }
+
+.help-content {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+}
+
+.help-content i {
+    color: #f59e0b;
+    font-size: 1.1rem;
+    margin-top: 2px;
+    flex-shrink: 0;
+}
+
+.help-text {
+    font-size: 0.85rem;
+    color: #92400e;
+}
+
+.help-text strong {
+    display: block;
+    margin-bottom: 4px;
+    font-weight: 600;
+}
+
+.help-text p {
+    margin: 0;
+    line-height: 1.4;
+}
+
+/* Status Section - styles moved to card content section above */
 
 .status-item {
     display: flex;
@@ -764,6 +874,43 @@ body {
         grid-template-columns: 1fr;
     }
     
+    /* Reduce card min-heights on mobile */
+    .device-section .card,
+    .power-section .card,
+    .alerts-section .card {
+        min-height: auto;
+    }
+    
+    .device-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+    }
+    
+    .device-value {
+        text-align: left;
+    }
+    
+    .temperature-section .card {
+        min-height: 180px;
+    }
+    
+    .mode-section .card {
+        min-height: 250px;
+    }
+    
+    .fan-section .card {
+        min-height: 300px;
+    }
+    
+    .token-section .card {
+        min-height: 250px;
+    }
+    
+    .status-section .card {
+        min-height: 350px;
+    }
+    
     .temperature-display {
         grid-template-columns: 1fr;
         gap: 15px;
@@ -859,4 +1006,82 @@ body {
         animation-iteration-count: 1 !important;
         transition-duration: 0.01ms !important;
     }
+}
+
+/* Tab Navigation */
+.tab-navigation {
+    display: flex;
+    margin-bottom: 15px;
+    border-bottom: 2px solid rgba(29, 161, 242, 0.1);
+}
+
+.tab-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 16px;
+    border: none;
+    background: transparent;
+    color: #6b7280;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    border-bottom: 2px solid transparent;
+}
+
+.tab-btn:hover {
+    color: #1DA1F2;
+    background: rgba(29, 161, 242, 0.05);
+}
+
+.tab-btn.active {
+    color: #1DA1F2;
+    border-bottom-color: #1DA1F2;
+}
+
+.tab-btn i {
+    font-size: 1rem;
+}
+
+/* Tab Content */
+.tab-content {
+    display: none;
+    flex: 1;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+/* Token label with refresh button */
+.token-label-with-refresh {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.token-label-with-refresh .refresh-btn {
+    width: 24px;
+    height: 24px;
+    padding: 4px;
+    font-size: 0.75rem;
+    border-radius: 4px;
+}
+
+/* Token actions layout adjustment */
+.token-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding-top: 15px;
+    border-top: 1px solid rgba(29, 161, 242, 0.1);
+    flex-wrap: wrap;
+}
+
+.token-refresh-btn {
+    flex: 1;
+    min-width: 120px;
 }

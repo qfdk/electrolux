@@ -80,6 +80,7 @@ class ElectroluxClient {
   }
 
 
+
   // Utility methods for command formatting
   static createTemperatureCommand(temperature, mode = null, fanSpeed = null, swing = null) {
     const command = { targetTemperatureC: temperature };

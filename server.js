@@ -131,11 +131,6 @@ app.get('/api/appliances/:id/info', ensureAPIInitialized, async (req, res) => {
 app.get('/api/appliances/:id/state', ensureAPIInitialized, async (req, res) => {
   try {
     const state = await electroluxAPI.getApplianceState(req.params.id);
-    console.log('📊 State API response:', {
-      connectionState: state.connectionState,
-      applianceState: state.properties?.reported?.applianceState,
-      connectivityState: state.properties?.reported?.connectivityState
-    });
     res.json({ success: true, data: state, timestamp: new Date().toISOString() });
   } catch (error) {
     console.error('Error getting appliance state:', error.message);
@@ -232,6 +227,7 @@ app.post('/api/token/refresh', ensureAPIInitialized, async (req, res) => {
     });
   }
 });
+
 
 // Error handling middleware
 app.use((err, req, res, next) => {

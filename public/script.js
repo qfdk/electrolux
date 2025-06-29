@@ -22,11 +22,7 @@ class ElectroluxController {
   }
 
   bindEvents() {
-    // Device selection
-    document.getElementById('deviceSelect').addEventListener('change', (e) => {
-      this.selectAppliance(e.target.value);
-    });
-
+    // Device refresh
     document.getElementById('refreshDevices').addEventListener('click', () => {
       this.loadAppliances();
     });
@@ -91,29 +87,11 @@ class ElectroluxController {
       this.manualRefreshToken();
     });
 
-    // Debug: Add capabilities check
-    document.addEventListener('keydown', (e) => {
-      if (e.ctrlKey && e.key === 'd') {
-        e.preventDefault();
-        this.debugCapabilities();
-      }
-      // Force refresh status
-      if (e.ctrlKey && e.key === 'r') {
-        e.preventDefault();
-        console.log('🔄 Force refreshing status...');
-        this.refreshStatus(true);
-      }
-      // Debug current state
-      if (e.ctrlKey && e.key === 's') {
-        e.preventDefault();
-        console.log('📊 Current device state:', this.currentState);
-        console.log('🔌 Connection info:', {
-          topLevelConnection: this.currentState?.connectionState,
-          propertiesConnectivity: this.currentState?.properties?.reported?.connectivityState,
-          deviceStatusElement: document.getElementById('deviceStatus')?.textContent,
-          connectionStatusElement: document.getElementById('deviceConnectionStatus')?.textContent
-        });
-      }
+    // Tab switching
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        this.switchTab(btn.dataset.tab);
+      });
     });
   }
 
@@ -134,54 +112,28 @@ class ElectroluxController {
       const response = await electroluxClient.getAppliances();
       const appliances = response.data || [];
       
-      this.populateDeviceSelect(appliances);
-      
       // Auto-select first device or test device
       if (appliances.length > 0) {
         const testId = '950011716506019911110697';
         const testDevice = appliances.find(a => (a.applianceId || a.id) === testId);
         const selectedId = testDevice ? testId : (appliances[0].applianceId || appliances[0].id);
         
-        document.getElementById('deviceSelect').value = selectedId;
         await this.selectAppliance(selectedId);
       } else {
         // If no appliances from API, use test device
-        this.addTestDevice();
+        this.useTestDevice();
       }
     } catch (error) {
       console.error('Failed to load appliances:', error);
       this.showError('加载设备列表失败: ' + error.message);
-      this.addTestDevice();
+      this.useTestDevice();
     } finally {
       this.hideLoading();
     }
   }
 
-  populateDeviceSelect(appliances) {
-    const select = document.getElementById('deviceSelect');
-    select.innerHTML = '<option value="">选择设备...</option>';
-    
-    appliances.forEach(appliance => {
-      const option = document.createElement('option');
-      option.value = appliance.applianceId || appliance.id;
-      option.textContent = appliance.applianceName || appliance.name || `设备 ${appliance.applianceId || appliance.id}`;
-      select.appendChild(option);
-    });
-
-    select.disabled = false;
-  }
-
-  addTestDevice() {
-    const select = document.getElementById('deviceSelect');
-    select.innerHTML = '<option value="">选择设备...</option>';
-    
-    const option = document.createElement('option');
-    option.value = '950011716506019911110697';
-    option.textContent = 'Electrolux AC (测试设备)';
-    select.appendChild(option);
-    
-    select.disabled = false;
-    select.value = '950011716506019911110697';
+  useTestDevice() {
+    // Use the known test device ID
     this.selectAppliance('950011716506019911110697');
   }
 
@@ -217,27 +169,24 @@ class ElectroluxController {
       }
 
       // Update device state and get connection info from state
+      let connectionState = 'Unknown';
       if (stateResponse.status === 'fulfilled') {
         const stateData = stateResponse.value.data;
         this.updateDeviceState(stateData);
         
-        // Update device info with connection state from state API  
-        if (deviceInfo) {
-          // Pass the connection state from state API to updateDeviceInfo
-          this.updateDeviceInfo(deviceInfo, stateData.connectionState);
-        } else {
-          deviceInfo = {
-            applianceName: '空调',
-            connectionState: stateData.connectionState
-          };
-          this.updateDeviceInfo(deviceInfo);
-        }
+        // Get connection state from state data
+        const topLevelConnectionState = stateData?.connectionState;
+        const propertiesConnectivityState = stateData?.properties?.reported?.connectivityState;
+        connectionState = topLevelConnectionState || propertiesConnectivityState || 'Unknown';
       } else {
         console.warn('Could not load device state, using defaults');
         this.updateDeviceState({});
-        if (deviceInfo) {
-          this.updateDeviceInfo(deviceInfo);
-        }
+      }
+
+      // Update device info display with connection state
+      if (deviceInfo) {
+        deviceInfo.connectionState = connectionState;
+        this.updateDeviceInfo(deviceInfo);
       }
 
       this.enableControls();
@@ -260,38 +209,12 @@ class ElectroluxController {
     }
   }
 
-  updateDeviceInfo(info, forceConnectionState = null) {
-    const deviceName = document.getElementById('deviceName');
-    const deviceStatus = document.getElementById('deviceStatus');
-    
-    if (info) {
-      deviceName.textContent = info.applianceName || info.name || '未知设备';
-      
-      // Use forced connection state if provided (from state API), otherwise use info
-      const connectionState = forceConnectionState || info.connectionState;
-      const isConnected = connectionState?.toLowerCase() === 'connected';
-      
-      deviceStatus.textContent = isConnected ? '在线' : '离线';
-      deviceStatus.className = `device-status ${isConnected ? 'online' : 'offline'}`;
-      
-      // Also update header connection status
-      this.updateConnectionStatus(isConnected, isConnected ? '设备已连接' : '设备未连接');
-    } else {
-      deviceName.textContent = '测试设备';
-      deviceStatus.textContent = '未知';
-      deviceStatus.className = 'device-status unknown';
-    }
-
-    document.getElementById('deviceInfo').style.display = 'flex';
-  }
 
   updateDeviceState(state) {
     this.currentState = state || {};
     
     // Extract properties from the actual API response structure
     const properties = state?.properties?.reported || {};
-    
-    console.log('🔍 Updating device state with properties:', properties);
     
     // Always use Celsius temperature
     const currentTemp = properties.ambientTemperatureC;
@@ -319,16 +242,6 @@ class ElectroluxController {
     const isConnected = 
       topLevelConnectionState?.toLowerCase() === 'connected' || 
       propertiesConnectivityState?.toLowerCase() === 'connected';
-    
-    console.log('💡 Power and connection state update:', {
-      mode: mode,
-      applianceState: applianceState,
-      isOn: applianceState?.toLowerCase() === 'running',
-      topLevelConnectionState: topLevelConnectionState,
-      propertiesConnectivityState: propertiesConnectivityState,
-      isConnected: isConnected,
-      fullState: state
-    });
     
     // Update device info panel
     const deviceStatus = document.getElementById('deviceStatus');
@@ -361,6 +274,24 @@ class ElectroluxController {
 
     // Update status display
     this.updateStatusDisplay(state);
+  }
+
+  updateDeviceInfo(deviceInfo) {
+    const deviceNameEl = document.getElementById('deviceName');
+    const deviceOnlineStatusEl = document.getElementById('deviceOnlineStatus');
+
+    if (deviceInfo) {
+      deviceNameEl.textContent = deviceInfo.applianceName || '未知设备';
+      
+      // Update online status with appropriate styling
+      const isOnline = deviceInfo.connectionState?.toLowerCase() === 'connected';
+      deviceOnlineStatusEl.textContent = isOnline ? '在线' : '离线';
+      deviceOnlineStatusEl.className = `device-value ${isOnline ? 'online' : 'offline'}`;
+    } else {
+      deviceNameEl.textContent = '未知设备';
+      deviceOnlineStatusEl.textContent = '离线';
+      deviceOnlineStatusEl.className = 'device-value offline';
+    }
   }
 
   updateModeButtons(activeMode) {
@@ -646,16 +577,12 @@ class ElectroluxController {
       return;
     }
 
-    // Debug: Log current state before sending command
-    console.log('📊 Current device state before command:', this.currentState);
-    console.log('🎯 Sending command:', command);
 
     this.showLoading(`${description}...`);
     this.disableAllButtons(); // 禁用所有按钮防止重复操作
 
     try {
       const response = await electroluxClient.controlAppliance(this.currentApplianceId, command);
-      console.log('✅ Command response:', response);
       
       // Wait for state change with polling
       await this.waitForStateChange(command, description);
@@ -676,10 +603,8 @@ class ElectroluxController {
     
     // 记录预期的状态变化
     const expectedChanges = this.getExpectedStateChanges(command);
-    console.log('🎯 Expected state changes:', expectedChanges);
     
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      console.log(`🔄 Checking state change (${attempt}/${maxAttempts})...`);
       
       // 等待一段时间让设备状态更新
       await new Promise(resolve => setTimeout(resolve, delayBetweenAttempts));
@@ -692,7 +617,6 @@ class ElectroluxController {
         
         // 检查是否发生了预期的状态变化
         if (this.hasStateChanged(properties, expectedChanges)) {
-          console.log('✅ State change detected, updating UI...');
           this.updateDeviceState(newState);
           return; // 状态已改变，退出等待
         }
@@ -706,7 +630,6 @@ class ElectroluxController {
     }
     
     // 超时后最后刷新一次状态
-    console.log('⏰ Timeout waiting for state change, final refresh...');
     await this.refreshStatus(false);
   }
 
@@ -868,28 +791,17 @@ class ElectroluxController {
 
   updateTokenStatusDisplay(tokenData) {
     const accessTokenStatus = document.getElementById('accessTokenStatus');
-    const refreshTokenStatus = document.getElementById('refreshTokenStatus');
-    const tokenExpiry = document.getElementById('tokenExpiry');
     const tokenTimeLeft = document.getElementById('tokenTimeLeft');
-    const apiStatus = document.getElementById('apiStatus');
     const manualRefreshBtn = document.getElementById('manualRefreshToken');
+    const tokenHelp = document.getElementById('tokenHelp');
 
     if (!tokenData) {
       // Error state
       accessTokenStatus.textContent = '检查失败';
       accessTokenStatus.className = 'token-status invalid';
       
-      refreshTokenStatus.textContent = '检查失败';
-      refreshTokenStatus.className = 'token-status invalid';
-      
-      tokenExpiry.textContent = '未知';
-      tokenExpiry.className = 'token-status invalid';
-      
       tokenTimeLeft.textContent = '未知';
       tokenTimeLeft.className = 'token-status invalid';
-      
-      apiStatus.textContent = '不可用';
-      apiStatus.className = 'token-status invalid';
       
       manualRefreshBtn.disabled = true;
       return;
@@ -902,25 +814,6 @@ class ElectroluxController {
     } else {
       accessTokenStatus.textContent = '缺失';
       accessTokenStatus.className = 'token-status invalid';
-    }
-
-    // Refresh token status
-    if (tokenData.hasRefreshToken) {
-      refreshTokenStatus.textContent = '有效';
-      refreshTokenStatus.className = 'token-status valid';
-    } else {
-      refreshTokenStatus.textContent = '缺失';
-      refreshTokenStatus.className = 'token-status invalid';
-    }
-
-    // Token expiry
-    if (tokenData.tokenExpiry) {
-      const expiryDate = new Date(tokenData.tokenExpiry);
-      tokenExpiry.textContent = expiryDate.toLocaleString('zh-CN');
-      tokenExpiry.className = `token-status ${tokenData.isExpired ? 'invalid' : 'info'}`;
-    } else {
-      tokenExpiry.textContent = '未知';
-      tokenExpiry.className = 'token-status warning';
     }
 
     // Time left
@@ -943,17 +836,23 @@ class ElectroluxController {
       tokenTimeLeft.className = 'token-status warning';
     }
 
-    // API status
-    if (tokenData.apiInitialized) {
-      apiStatus.textContent = '就绪';
-      apiStatus.className = 'token-status valid';
+    // Manual refresh button and help
+    manualRefreshBtn.disabled = !tokenData.hasRefreshToken || !tokenData.apiInitialized || tokenData.isRefreshTokenExpired;
+    
+    // Show help if refresh token is missing or expired
+    if (tokenData.hasRefreshToken && !tokenData.isRefreshTokenExpired) {
+      tokenHelp.style.display = 'none';
     } else {
-      apiStatus.textContent = '未初始化';
-      apiStatus.className = 'token-status invalid';
+      tokenHelp.style.display = 'block';
+      
+      // Update help message based on the issue
+      const helpText = tokenHelp.querySelector('.help-text p');
+      if (!tokenData.hasRefreshToken) {
+        helpText.textContent = '需要在.env文件中配置ELECTROLUX_REFRESH_TOKEN才能自动刷新访问令牌';
+      } else if (tokenData.isRefreshTokenExpired) {
+        helpText.textContent = '刷新令牌已过期，需要重新获取新的ELECTROLUX_REFRESH_TOKEN';
+      }
     }
-
-    // Manual refresh button
-    manualRefreshBtn.disabled = !tokenData.hasRefreshToken || !tokenData.apiInitialized;
   }
 
   async manualRefreshToken() {
@@ -970,10 +869,34 @@ class ElectroluxController {
       
     } catch (error) {
       console.error('Manual token refresh failed:', error);
-      this.showError('Token刷新失败: ' + error.message);
+      
+      // Show specific error message for missing refresh token
+      if (error.message.includes('refresh token')) {
+        this.showError('无法刷新Token: 缺少刷新令牌。请在.env文件中配置ELECTROLUX_REFRESH_TOKEN');
+      } else {
+        this.showError('Token刷新失败: ' + error.message);
+      }
     } finally {
       this.hideLoading();
     }
+  }
+
+  switchTab(tabName) {
+    // Update tab buttons
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.tab === tabName);
+    });
+
+    // Update tab content
+    document.querySelectorAll('.tab-content').forEach(content => {
+      if (tabName === 'mode' && content.id === 'modeTab') {
+        content.classList.add('active');
+      } else if (tabName === 'token' && content.id === 'tokenTab') {
+        content.classList.add('active');
+      } else {
+        content.classList.remove('active');
+      }
+    });
   }
 
   // UI helpers
@@ -1042,53 +965,6 @@ class ElectroluxController {
     return stateLower === 'running' || (modeLower && modeLower !== 'off');
   }
 
-  // Debug method to check device capabilities
-  async debugCapabilities() {
-    if (!this.currentApplianceId) {
-      console.log('No appliance selected');
-      return;
-    }
-
-    try {
-      console.log('🔍 Fetching device capabilities...');
-      const response = await electroluxClient.getApplianceCapabilities(this.currentApplianceId);
-      console.log('📋 Device Capabilities:', response.data);
-      
-      // Show supported properties for commands
-      if (response.data && typeof response.data === 'object') {
-        const writeableProps = [];
-        const readOnlyProps = [];
-        
-        for (const [key, prop] of Object.entries(response.data)) {
-          if (prop.access === 'readwrite' || prop.access === 'write') {
-            writeableProps.push(key);
-          } else if (prop.access === 'read') {
-            readOnlyProps.push(key);
-          }
-        }
-        
-        console.log('✅ Supported command properties:', writeableProps);
-        console.log('ℹ️ Read-only properties:', readOnlyProps);
-      }
-      
-      // Also log current power state analysis
-      console.log('⚡ Current power state analysis:', {
-        isActuallyOn: this.isDeviceActuallyOn(),
-        currentState: this.currentState?.properties?.reported
-      });
-      
-      // Show which properties might be restricted based on current state
-      const currentState = this.currentState?.properties?.reported || {};
-      console.log('🔒 Current restrictions based on state:', {
-        currentMode: currentState.mode,
-        applianceState: currentState.applianceState,
-        fanSpeedSetting: currentState.fanSpeedSetting,
-        sleepMode: currentState.sleepMode
-      });
-    } catch (error) {
-      console.error('Failed to fetch capabilities:', error);
-    }
-  }
 }
 
 // Initialize the application when DOM is loaded
