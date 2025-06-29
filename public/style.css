@@ -454,6 +454,13 @@ body {
     color: white;
 }
 
+.mode-btn.active:hover:not(:disabled) {
+    border-color: #0ea5e9;
+    background: #0ea5e9;
+    color: white;
+    transform: translateY(-2px);
+}
+
 .mode-btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
@@ -509,6 +516,13 @@ body {
     color: white;
 }
 
+.fan-btn.active:hover:not(:disabled) {
+    border-color: #0ea5e9;
+    background: #0ea5e9;
+    color: white;
+    transform: translateY(-2px);
+}
+
 .fan-btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
@@ -544,9 +558,116 @@ body {
     color: white;
 }
 
+.swing-btn.active:hover:not(:disabled), .sleep-btn.active:hover:not(:disabled) {
+    border-color: #0ea5e9;
+    background: #0ea5e9;
+    color: white;
+    transform: translateY(-2px);
+}
+
 .swing-btn:disabled, .sleep-btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+}
+
+/* Additional disabled state styling */
+.disabled {
+    opacity: 0.4 !important;
+    cursor: not-allowed !important;
+    pointer-events: none !important;
+    background: #f3f4f6 !important;
+    color: #9ca3af !important;
+    border-color: #d1d5db !important;
+}
+
+/* Loading state styling */
+.loading {
+    opacity: 0.7 !important;
+    cursor: wait !important;
+    pointer-events: none !important;
+}
+
+.mode-btn.loading,
+.mode-btn.loading:hover,
+.mode-btn.loading:focus,
+.mode-btn.loading:active {
+    background: #1DA1F2 !important;
+    color: white !important;
+    border-color: #1990db !important;
+    transform: none !important;
+}
+
+.fan-btn.loading,
+.fan-btn.loading:hover,
+.fan-btn.loading:focus,
+.fan-btn.loading:active {
+    background: #1DA1F2 !important;
+    color: white !important;
+    border-color: #1990db !important;
+    transform: none !important;
+}
+
+.temp-btn.loading,
+.temp-btn.loading:hover,
+.temp-btn.loading:focus,
+.temp-btn.loading:active {
+    background: #1DA1F2 !important;
+    color: white !important;
+    border-color: #1990db !important;
+    transform: none !important;
+}
+
+.swing-btn.loading,
+.swing-btn.loading:hover,
+.swing-btn.loading:focus,
+.swing-btn.loading:active,
+.sleep-btn.loading,
+.sleep-btn.loading:hover,
+.sleep-btn.loading:focus,
+.sleep-btn.loading:active {
+    background: #1DA1F2 !important;
+    color: white !important;
+    border-color: #1990db !important;
+    transform: none !important;
+}
+
+.power-btn.loading,
+.power-btn.loading:hover,
+.power-btn.loading:focus,
+.power-btn.loading:active {
+    background: #1DA1F2 !important;
+    color: white !important;
+    border-color: #1990db !important;
+    transform: none !important;
+}
+
+/* Loading animation for temperature display */
+#targetTemp.loading {
+    animation: pulse 1.5s ease-in-out infinite;
+    color: #1DA1F2 !important;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 0.6;
+    }
+    50% {
+        opacity: 1;
+    }
+}
+
+/* Spinner animation */
+.fa-spinner {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 .swing-btn i, .sleep-btn i {

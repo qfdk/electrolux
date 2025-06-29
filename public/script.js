@@ -7,8 +7,12 @@ class ElectroluxController {
     this.targetTemperature = 24;
     this.currentMode = 'COOL'; // Default to COOL mode (valid according to API)
     this.currentFanSpeed = 'AUTO';
-    this.temperatureUnit = 'CELSIUS'; // Always use CELSIUS
     this.alerts = [];
+    
+    // Temperature adjustment debouncing
+    this.temperatureDebounceTimer = null;
+    this.pendingTemperature = null;
+    this.isTemperatureAdjusting = false;
     
     this.init();
   }
@@ -159,6 +163,11 @@ class ElectroluxController {
       if (infoResponse.status === 'fulfilled') {
         const info = infoResponse.value.data;
         const applianceInfo = info.applianceInfo;
+        
+        // Store device capabilities for dynamic UI control
+        this.deviceCapabilities = info.capabilities;
+        console.log('Device capabilities loaded:', this.deviceCapabilities);
+        
         deviceInfo = {
           applianceName: `${applianceInfo?.brand || 'ELECTROLUX'} ${applianceInfo?.model || '空调'}`,
           deviceType: applianceInfo?.deviceType,
@@ -298,6 +307,56 @@ class ElectroluxController {
     document.querySelectorAll('.mode-btn').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.mode === activeMode);
     });
+    
+    // Update control availability based on current mode
+    this.updateControlsAvailability(activeMode);
+  }
+
+  updateControlsAvailability(currentMode) {
+    // Get restrictions from actual device capabilities (synchronous)
+    const restrictions = this.getModeRestrictionsSync(currentMode);
+
+    // Update fan speed buttons
+    document.querySelectorAll('.fan-btn').forEach(btn => {
+      const speed = btn.dataset.speed;
+      const isAllowed = restrictions.allowedFanSpeeds.includes(speed);
+      const isReadonly = restrictions.fanSpeedReadonly;
+      
+      if (!isAllowed || isReadonly) {
+        btn.setAttribute('disabled', 'disabled');
+        btn.classList.add('disabled');
+      } else {
+        btn.removeAttribute('disabled');
+        btn.classList.remove('disabled');
+      }
+    });
+
+    // Update temperature controls
+    const tempControls = ['tempDown', 'tempUp'];
+    tempControls.forEach(id => {
+      const btn = document.getElementById(id);
+      if (btn) {
+        if (restrictions.temperatureDisabled) {
+          btn.setAttribute('disabled', 'disabled');
+          btn.classList.add('disabled');
+        } else {
+          btn.removeAttribute('disabled');
+          btn.classList.remove('disabled');
+        }
+      }
+    });
+
+    // Update sleep mode button
+    const sleepToggle = document.getElementById('sleepToggle');
+    if (sleepToggle) {
+      if (restrictions.sleepModeDisabled) {
+        sleepToggle.setAttribute('disabled', 'disabled');
+        sleepToggle.classList.add('disabled');
+      } else {
+        sleepToggle.removeAttribute('disabled');
+        sleepToggle.classList.remove('disabled');
+      }
+    }
   }
 
   updatePowerButtons(powerState) {
@@ -500,64 +559,498 @@ class ElectroluxController {
   }
 
   async adjustTemperature(delta) {
-    // Temperature range in Celsius (from API docs)
-    const minTemp = 15.56;
-    const maxTemp = 32.22;
+    // Temperature range based on actual device capabilities
+    const minTemp = 16;
+    const maxTemp = 32;
     
     const newTemp = Math.max(minTemp, Math.min(maxTemp, this.targetTemperature + delta));
     if (newTemp === this.targetTemperature) return;
 
-    this.targetTemperature = Number(newTemp.toFixed(1));
-    document.getElementById('targetTemp').textContent = this.targetTemperature;
+    // Update target temperature immediately for UI responsiveness
+    this.targetTemperature = newTemp;
+    this.pendingTemperature = newTemp;
+    
+    // Update display immediately
+    document.getElementById('targetTemp').textContent = newTemp;
+    
+    // Show visual feedback if not already adjusting
+    if (!this.isTemperatureAdjusting) {
+      this.isTemperatureAdjusting = true;
+      this.showTemperatureAdjusting();
+    }
+    
+    // Clear previous timer and set new one
+    if (this.temperatureDebounceTimer) {
+      clearTimeout(this.temperatureDebounceTimer);
+    }
+    
+    // Set new timer to execute command after user stops clicking (500ms)
+    this.temperatureDebounceTimer = setTimeout(async () => {
+      await this.executeTemperatureCommand();
+    }, 500);
+  }
 
-    const command = {
-      mode: this.currentMode,
-      targetTemperatureC: this.targetTemperature,
-      fanSpeedSetting: this.currentFanSpeed
-    };
+  async executeTemperatureCommand() {
+    if (!this.pendingTemperature || !this.isTemperatureAdjusting) return;
+    
+    const targetTemp = this.pendingTemperature;
+    const previousTemp = this.targetTemperature;
+    
+    try {
+      // Send only temperature parameter - device rejects multiple parameters
+      const command = {
+        targetTemperatureC: targetTemp
+      };
 
-    await this.sendCommand(command, `设置温度为 ${this.targetTemperature}°C`);
+      await this.sendCommand(command, `设置温度为 ${targetTemp}°C`);
+      
+      // Wait and verify temperature change
+      await this.waitForTemperatureChange(targetTemp, 15000);
+      
+      this.showSuccess(`温度已设置为 ${targetTemp}°C`);
+      
+    } catch (error) {
+      console.error('Temperature change failed:', error);
+      this.showError(`温度设置失败: ${error.message}`);
+      // Revert to previous temperature on failure
+      this.targetTemperature = previousTemp;
+      document.getElementById('targetTemp').textContent = previousTemp;
+    } finally {
+      this.hideTemperatureAdjusting();
+      this.isTemperatureAdjusting = false;
+      this.pendingTemperature = null;
+      this.temperatureDebounceTimer = null;
+    }
+  }
+
+  showTemperatureAdjusting() {
+    // Show subtle visual feedback that temperature is being adjusted
+    const tempDisplay = document.getElementById('targetTemp');
+    if (tempDisplay) {
+      tempDisplay.classList.add('loading');
+      tempDisplay.style.opacity = '0.8';
+    }
+    
+    // Disable temperature controls to prevent rapid clicking
+    const tempControls = ['tempDown', 'tempUp'];
+    tempControls.forEach(id => {
+      const btn = document.getElementById(id);
+      if (btn) {
+        btn.style.opacity = '0.7';
+      }
+    });
+  }
+
+  hideTemperatureAdjusting() {
+    // Remove visual feedback
+    const tempDisplay = document.getElementById('targetTemp');
+    if (tempDisplay) {
+      tempDisplay.classList.remove('loading');
+      tempDisplay.style.opacity = '1';
+    }
+    
+    // Re-enable temperature controls
+    const tempControls = ['tempDown', 'tempUp'];
+    tempControls.forEach(id => {
+      const btn = document.getElementById(id);
+      if (btn) {
+        btn.style.opacity = '1';
+        btn.disabled = false;
+      }
+    });
+  }
+
+
+  async waitForTemperatureChange(expectedTemp, timeout = 15000) {
+    const startTime = Date.now();
+    const checkInterval = 1000; // Check every 1 second
+    
+    while (Date.now() - startTime < timeout) {
+      try {
+        const state = await electroluxClient.getApplianceState(this.currentApplianceId);
+        const currentTemp = state.data?.properties?.reported?.targetTemperatureC;
+        
+        if (currentTemp === expectedTemp) {
+          console.log(`✅ Temperature successfully changed to ${expectedTemp}°C`);
+          return true;
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, checkInterval));
+      } catch (error) {
+        console.warn('Error checking temperature change:', error);
+      }
+    }
+    
+    throw new Error(`Temperature change to ${expectedTemp}°C did not complete within ${timeout}ms`);
   }
 
   async setMode(mode) {
     const upperMode = mode.toUpperCase();
     if (upperMode === this.currentMode) return;
 
-    this.currentMode = upperMode;
-    this.updateModeButtons(upperMode);
+    const previousMode = this.currentMode;
+    
+    // Show loading state immediately
+    this.showModeLoading(upperMode);
+    
+    try {
+      // Get current device state and capabilities
+      const currentState = await electroluxClient.getApplianceState(this.currentApplianceId);
+      const currentProperties = currentState.data?.properties?.reported || {};
+      
+      // Get fresh capabilities for the target mode
+      const modeRestrictions = await this.getModeRestrictions(upperMode, true);
+      
+      // Build optimal command based on capabilities and current state
+      const command = await this.buildOptimalModeCommand(upperMode, currentProperties, modeRestrictions);
+      
+      // Send the optimized command
+      await this.sendCommandSilent(command);
+      
+      // Wait and verify mode change
+      const actualMode = await this.waitForModeChange(upperMode);
+      
+      // Update current mode after successful change (use actual mode if different)
+      const finalMode = typeof actualMode === 'string' ? actualMode : upperMode;
+      this.currentMode = finalMode;
+      
+      if (finalMode === upperMode) {
+        this.showSuccess(`模式已切换为 ${ElectroluxClient.formatMode(finalMode)}`);
+      } else {
+        this.showWarning(`设备自动选择了 ${ElectroluxClient.formatMode(finalMode)} 模式（而非 ${ElectroluxClient.formatMode(upperMode)}）`);
+      }
+      
+    } catch (error) {
+      console.error('Mode change failed:', error);
+      this.showError(`模式切换失败: ${error.message}`);
+      // Revert to previous mode on failure
+      this.currentMode = previousMode;
+    } finally {
+      this.hideModeLoading();
+      // Update buttons based on actual current state
+      this.updateModeButtons(this.currentMode);
+    }
+  }
 
-    const command = { mode: upperMode };
-    if (upperMode !== 'OFF') {
-      command.targetTemperatureC = this.targetTemperature;
-      command.fanSpeedSetting = this.currentFanSpeed;
+  async buildOptimalModeCommand(targetMode, currentProperties, modeRestrictions) {
+    const command = { mode: targetMode };
+    
+    // Only add additional parameters if they're allowed in the target mode
+    // and if they differ from current device state
+    
+    // Add temperature if it's allowed and we have a target temperature
+    if (!modeRestrictions.temperatureDisabled && this.targetTemperature) {
+      const currentTemp = currentProperties.targetTemperatureC;
+      if (currentTemp !== this.targetTemperature) {
+        command.targetTemperatureC = this.targetTemperature;
+      }
+    }
+    
+    // Add fan speed if it's writable in the target mode
+    if (!modeRestrictions.fanSpeedReadonly && this.currentFanSpeed) {
+      const currentFanSpeed = currentProperties.fanSpeedSetting?.toUpperCase();
+      if (currentFanSpeed !== this.currentFanSpeed && 
+          modeRestrictions.allowedFanSpeeds.includes(this.currentFanSpeed)) {
+        command.fanSpeedSetting = this.currentFanSpeed;
+      }
+    }
+    
+    // If command has multiple parameters, check if device supports multi-parameter commands
+    const paramCount = Object.keys(command).length;
+    if (paramCount > 1) {
+      console.log(`⚠️ Command has ${paramCount} parameters - device may reject multi-parameter commands`);
+      // Return only mode for now, let device handle other parameters automatically
+      return { mode: targetMode };
+    }
+    
+    return command;
+  }
+
+  showModeLoading(targetMode) {
+    // Disable all mode buttons
+    document.querySelectorAll('.mode-btn').forEach(btn => {
+      btn.disabled = true;
+      if (btn.dataset.mode === targetMode) {
+        btn.classList.add('loading');
+        btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i><span>切换中...</span>`;
+      }
+    });
+  }
+
+  hideModeLoading() {
+    document.querySelectorAll('.mode-btn').forEach(btn => {
+      btn.disabled = false;
+      btn.classList.remove('loading');
+      // Restore original button content based on mode
+      const mode = btn.dataset.mode;
+      const icon = this.getModeIcon(mode);
+      const label = ElectroluxClient.formatMode(mode);
+      btn.innerHTML = `<i class="${icon}"></i><span>${label}</span>`;
+    });
+  }
+
+  getModeIcon(mode) {
+    const icons = {
+      'AUTO': 'fas fa-magic',
+      'COOL': 'fas fa-snowflake', 
+      'HEAT': 'fas fa-fire',
+      'DRY': 'fas fa-tint',
+      'FANONLY': 'fas fa-wind'
+    };
+    return icons[mode] || 'fas fa-cog';
+  }
+
+  async waitForModeChange(expectedMode, timeout = 20000) {
+    const startTime = Date.now();
+    const checkInterval = 1000; // Check every 1 second
+    let lastKnownMode = null;
+    
+    console.log(`🔄 Waiting for mode change to ${expectedMode}...`);
+    
+    while (Date.now() - startTime < timeout) {
+      try {
+        const state = await electroluxClient.getApplianceState(this.currentApplianceId);
+        const currentMode = state.data?.properties?.reported?.mode?.toUpperCase();
+        
+        if (lastKnownMode !== currentMode) {
+          console.log(`📱 Device mode is now: ${currentMode}`);
+          lastKnownMode = currentMode;
+        }
+        
+        if (currentMode === expectedMode) {
+          console.log(`✅ Mode successfully changed to ${expectedMode}`);
+          return true;
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, checkInterval));
+      } catch (error) {
+        console.warn('Error checking mode change:', error);
+        await new Promise(resolve => setTimeout(resolve, checkInterval));
+      }
+    }
+    
+    // If we get here, the mode change didn't complete as expected
+    const finalState = await electroluxClient.getApplianceState(this.currentApplianceId);
+    const finalMode = finalState.data?.properties?.reported?.mode?.toUpperCase();
+    
+    if (finalMode !== expectedMode) {
+      console.log(`⚠️ Mode change timeout. Expected: ${expectedMode}, Actual: ${finalMode}`);
+      // Don't throw error if device chose a different mode - this might be intentional
+      if (finalMode && finalMode !== 'OFF') {
+        console.log(`Device chose ${finalMode} mode instead of ${expectedMode} - this may be due to smart logic`);
+        return finalMode; // Return the actual mode instead of throwing
+      }
+    }
+    
+    throw new Error(`Mode change to ${expectedMode} did not complete within ${timeout}ms. Device is in ${finalMode} mode.`);
+  }
+
+  async getModeRestrictions(mode, refreshCapabilities = false) {
+    // Refresh capabilities if requested
+    if (refreshCapabilities) {
+      await this.refreshCapabilities();
     }
 
-    await this.sendCommand(command, `设置模式为 ${ElectroluxClient.formatMode(upperMode)}`);
+    // Use cached capabilities if available, otherwise use default restrictions
+    if (!this.deviceCapabilities) {
+      console.warn('Device capabilities not loaded, using default restrictions');
+      return this.getDefaultModeRestrictions(mode);
+    }
+
+    return this.parseCapabilitiesForMode(mode);
+  }
+
+  getModeRestrictionsSync(mode) {
+    // Synchronous version for immediate use with cached capabilities
+    if (!this.deviceCapabilities) {
+      console.warn('Device capabilities not loaded, using default restrictions');
+      return this.getDefaultModeRestrictions(mode);
+    }
+
+    return this.parseCapabilitiesForMode(mode);
+  }
+
+  getDefaultModeRestrictions(mode) {
+    const defaultRestrictions = {
+      'FANONLY': { fanSpeedReadonly: false, temperatureDisabled: true, sleepModeDisabled: true },
+      'DRY': { fanSpeedReadonly: true, temperatureDisabled: true, sleepModeDisabled: true },
+      'AUTO': { fanSpeedReadonly: true, temperatureDisabled: false, sleepModeDisabled: false },
+      'COOL': { fanSpeedReadonly: false, temperatureDisabled: false, sleepModeDisabled: false },
+      'HEAT': { fanSpeedReadonly: false, temperatureDisabled: false, sleepModeDisabled: false }
+    };
+    return defaultRestrictions[mode] || defaultRestrictions['COOL'];
+  }
+
+  parseCapabilitiesForMode(mode) {
+    const capabilities = this.deviceCapabilities;
+    const restrictions = {
+      fanSpeedReadonly: false,
+      temperatureDisabled: false,
+      sleepModeDisabled: false,
+      allowedFanSpeeds: ['AUTO', 'HIGH', 'LOW', 'MIDDLE']
+    };
+
+    // Parse mode triggers to find restrictions for this specific mode
+    if (capabilities.mode && capabilities.mode.triggers) {
+      for (const trigger of capabilities.mode.triggers) {
+        const condition = trigger.condition;
+        
+        // Check if this trigger applies to the specified mode
+        if (condition.operand_2 === mode && condition.operator === 'eq') {
+          const actions = trigger.action;
+          
+          // Parse fanSpeedSetting restrictions
+          if (actions.fanSpeedSetting) {
+            restrictions.fanSpeedReadonly = actions.fanSpeedSetting.access === 'read';
+            if (actions.fanSpeedSetting.values) {
+              restrictions.allowedFanSpeeds = Object.keys(actions.fanSpeedSetting.values);
+            }
+          }
+          
+          // Parse temperature restrictions
+          if (actions.targetTemperatureC) {
+            restrictions.temperatureDisabled = actions.targetTemperatureC.disabled === true;
+          }
+          
+          // Parse sleep mode restrictions
+          if (actions.sleepMode) {
+            restrictions.sleepModeDisabled = actions.sleepMode.disabled === true;
+          }
+          
+          break;
+        }
+      }
+    }
+
+    return restrictions;
+  }
+
+  async loadDeviceCapabilities(force = false) {
+    try {
+      // Always reload if forced, or if capabilities not cached
+      if (force || !this.deviceCapabilities) {
+        console.log('Loading fresh device capabilities...');
+        const response = await electroluxClient.getApplianceInfo(this.currentApplianceId);
+        this.deviceCapabilities = response.data.capabilities;
+        console.log('Device capabilities loaded:', this.deviceCapabilities);
+      }
+      return this.deviceCapabilities;
+    } catch (error) {
+      console.error('Failed to load device capabilities:', error);
+      this.deviceCapabilities = null;
+      return null;
+    }
+  }
+
+  async refreshCapabilities() {
+    return await this.loadDeviceCapabilities(true);
   }
 
   async setFanSpeed(speed) {
     const upperSpeed = speed.toUpperCase();
     if (upperSpeed === this.currentFanSpeed) return;
 
-    this.currentFanSpeed = upperSpeed;
-    this.updateFanSpeedButtons(upperSpeed);
+    // Get fresh capabilities to check current restrictions
+    const modeRestrictions = await this.getModeRestrictions(this.currentMode, true);
+    if (modeRestrictions.fanSpeedReadonly) {
+      console.log(`Cannot change fan speed in ${this.currentMode} mode - fan speed is read-only`);
+      this.showError(`当前模式下无法调节风速`);
+      return;
+    }
 
-    const command = {
-      fanSpeedSetting: upperSpeed,
-      mode: this.currentMode,
-      targetTemperatureC: this.targetTemperature
-    };
+    if (!modeRestrictions.allowedFanSpeeds.includes(upperSpeed)) {
+      console.log(`Fan speed ${upperSpeed} not allowed in ${this.currentMode} mode`);
+      this.showError(`当前模式下不支持 ${ElectroluxClient.formatFanSpeed(upperSpeed)} 风速`);
+      return;
+    }
 
-    await this.sendCommand(command, `设置风速为 ${ElectroluxClient.formatFanSpeed(upperSpeed)}`);
+    const previousSpeed = this.currentFanSpeed;
+    
+    // Show loading state immediately
+    this.showFanSpeedLoading(upperSpeed);
+    
+    try {
+      // Send only fan speed parameter - device rejects multiple parameters
+      const command = {
+        fanSpeedSetting: upperSpeed
+      };
+
+      await this.sendCommand(command, `设置风速为 ${ElectroluxClient.formatFanSpeed(upperSpeed)}`);
+      
+      // Wait and verify fan speed change
+      await this.waitForFanSpeedChange(upperSpeed, 5000);
+      
+      // Update fan speed after successful change
+      this.currentFanSpeed = upperSpeed;
+      this.showSuccess(`风速已设置为 ${ElectroluxClient.formatFanSpeed(upperSpeed)}`);
+      
+    } catch (error) {
+      console.error('Fan speed change failed:', error);
+      this.showError(`风速设置失败: ${error.message}`);
+      // Revert to previous fan speed on failure
+      this.currentFanSpeed = previousSpeed;
+    } finally {
+      this.hideFanSpeedLoading();
+      // Update buttons based on actual current fan speed
+      this.updateFanSpeedButtons(this.currentFanSpeed);
+    }
+  }
+
+  showFanSpeedLoading(targetSpeed) {
+    // Disable all fan speed buttons
+    document.querySelectorAll('.fan-btn').forEach(btn => {
+      btn.disabled = true;
+      if (btn.dataset.speed === targetSpeed) {
+        btn.classList.add('loading');
+        const originalContent = btn.innerHTML;
+        btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i><span>设置中...</span>`;
+        btn.dataset.originalContent = originalContent;
+      }
+    });
+  }
+
+  hideFanSpeedLoading() {
+    document.querySelectorAll('.fan-btn').forEach(btn => {
+      btn.disabled = false;
+      btn.classList.remove('loading');
+      // Restore original content if it was changed
+      if (btn.dataset.originalContent) {
+        btn.innerHTML = btn.dataset.originalContent;
+        delete btn.dataset.originalContent;
+      }
+    });
+  }
+
+  async waitForFanSpeedChange(expectedSpeed, timeout = 15000) {
+    const startTime = Date.now();
+    const checkInterval = 1000; // Check every 1 second
+    
+    while (Date.now() - startTime < timeout) {
+      try {
+        const state = await electroluxClient.getApplianceState(this.currentApplianceId);
+        const currentSpeed = state.data?.properties?.reported?.fanSpeedSetting?.toUpperCase();
+        
+        if (currentSpeed === expectedSpeed) {
+          console.log(`✅ Fan speed successfully changed to ${expectedSpeed}`);
+          return true;
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, checkInterval));
+      } catch (error) {
+        console.warn('Error checking fan speed change:', error);
+      }
+    }
+    
+    throw new Error(`Fan speed change to ${expectedSpeed} did not complete within ${timeout}ms`);
   }
 
   async toggleSwing() {
     this.isSwingOn = !this.isSwingOn;
     this.updateSwingButton(this.isSwingOn);
 
+    // Send only swing parameter - device rejects multiple parameters
     await this.sendCommand({
-      verticalSwing: this.isSwingOn ? 'ON' : 'OFF',
-      mode: this.currentMode
+      verticalSwing: this.isSwingOn ? 'ON' : 'OFF'
     }, `${this.isSwingOn ? '开启' : '关闭'}摆风`);
   }
 
@@ -565,9 +1058,9 @@ class ElectroluxController {
     this.isSleepModeOn = !this.isSleepModeOn;
     this.updateSleepModeButton(this.isSleepModeOn);
 
+    // Send only sleep mode parameter - device rejects multiple parameters
     await this.sendCommand({
-      sleepMode: this.isSleepModeOn ? 'ON' : 'OFF',
-      mode: this.currentMode
+      sleepMode: this.isSleepModeOn ? 'ON' : 'OFF'
     }, `${this.isSleepModeOn ? '开启' : '关闭'}睡眠模式`);
   }
 
@@ -594,6 +1087,30 @@ class ElectroluxController {
     } finally {
       this.hideLoading();
       this.enableControls(); // 重新启用按钮
+    }
+  }
+
+  async sendCommandSilent(command) {
+    if (!this.currentApplianceId) {
+      throw new Error('No appliance selected');
+    }
+
+    try {
+      const response = await electroluxClient.controlAppliance(this.currentApplianceId, command);
+      
+      if (!response.success) {
+        throw new Error(response.error?.details || '命令发送失败');
+      }
+      
+      console.log('✅ Silent command sent successfully:', command);
+      
+      // Wait for state changes to propagate
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      return response;
+    } catch (error) {
+      console.error('❌ Silent command failed:', error);
+      throw error;
     }
   }
 
@@ -938,31 +1455,6 @@ class ElectroluxController {
         messageDiv.remove();
       }
     }, 5000);
-  }
-
-  // Helper to determine actual power state from multiple indicators
-  isDeviceActuallyOn() {
-    const properties = this.currentState?.properties?.reported || {};
-    
-    // Check multiple possible power indicators
-    const mode = properties.mode;
-    const applianceState = properties.applianceState;
-    const executeCommand = properties.executeCommand;
-    
-    console.log('🔍 Power state indicators:', {
-      mode,
-      applianceState, 
-      executeCommand,
-      currentMode: this.currentMode
-    });
-    
-    // Device is ON if:
-    // 1. applianceState is 'running' OR
-    // 2. mode is not 'off' (AUTO/COOL/DRY/FANONLY indicates it's on)
-    const stateLower = applianceState?.toLowerCase();
-    const modeLower = mode?.toLowerCase();
-    
-    return stateLower === 'running' || (modeLower && modeLower !== 'off');
   }
 
 }
