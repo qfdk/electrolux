@@ -640,26 +640,125 @@ class ElectroluxController {
     console.log('🎯 Sending command:', command);
 
     this.showLoading(`${description}...`);
+    this.disableAllButtons(); // 禁用所有按钮防止重复操作
 
     try {
       const response = await electroluxClient.controlAppliance(this.currentApplianceId, command);
       console.log('✅ Command response:', response);
+      
+      // Wait for state change with polling
+      await this.waitForStateChange(command, description);
+      
       this.showSuccess(`${description}成功`);
-      
-      // Refresh state after delays to see the change (devices may take time to update)
-      setTimeout(() => {
-        this.refreshStatus(false);
-      }, 3000);
-      
-      // Check again after longer delay
-      setTimeout(() => {
-        this.refreshStatus(false);
-      }, 8000);
     } catch (error) {
       console.error('Command failed:', error);
       this.showError(`${description}失败: ${error.message}`);
     } finally {
       this.hideLoading();
+      this.enableControls(); // 重新启用按钮
+    }
+  }
+
+  async waitForStateChange(command, description) {
+    const maxAttempts = 10; // 最多等待50秒 (5秒 x 10次)
+    const delayBetweenAttempts = 5000; // 每5秒检查一次
+    
+    // 记录预期的状态变化
+    const expectedChanges = this.getExpectedStateChanges(command);
+    console.log('🎯 Expected state changes:', expectedChanges);
+    
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      console.log(`🔄 Checking state change (${attempt}/${maxAttempts})...`);
+      
+      // 等待一段时间让设备状态更新
+      await new Promise(resolve => setTimeout(resolve, delayBetweenAttempts));
+      
+      try {
+        // 获取最新状态
+        const response = await electroluxClient.getApplianceState(this.currentApplianceId);
+        const newState = response.data;
+        const properties = newState?.properties?.reported || {};
+        
+        // 检查是否发生了预期的状态变化
+        if (this.hasStateChanged(properties, expectedChanges)) {
+          console.log('✅ State change detected, updating UI...');
+          this.updateDeviceState(newState);
+          return; // 状态已改变，退出等待
+        }
+        
+        // 更新loading消息显示进度
+        this.updateLoadingText(`${description}... (${attempt * 5}秒)`);
+        
+      } catch (error) {
+        console.warn(`Failed to check state on attempt ${attempt}:`, error.message);
+      }
+    }
+    
+    // 超时后最后刷新一次状态
+    console.log('⏰ Timeout waiting for state change, final refresh...');
+    await this.refreshStatus(false);
+  }
+
+  getExpectedStateChanges(command) {
+    const changes = {};
+    
+    if (command.executeCommand === 'OFF') {
+      changes.applianceState = 'off';
+    } else if (command.executeCommand === 'ON' || command.mode) {
+      changes.applianceState = 'running';
+    }
+    
+    if (command.mode) {
+      changes.mode = command.mode.toUpperCase();
+    }
+    
+    if (command.targetTemperatureC) {
+      changes.targetTemperatureC = command.targetTemperatureC;
+    }
+    
+    if (command.fanSpeedSetting) {
+      changes.fanSpeedSetting = command.fanSpeedSetting.toUpperCase();
+    }
+    
+    return changes;
+  }
+
+  hasStateChanged(currentProperties, expectedChanges) {
+    let hasAnyChange = false;
+    
+    for (const [key, expectedValue] of Object.entries(expectedChanges)) {
+      const currentValue = currentProperties[key];
+      
+      if (key === 'applianceState') {
+        // 特殊处理电源状态
+        const currentLower = currentValue?.toLowerCase();
+        const expectedLower = expectedValue?.toLowerCase();
+        if (currentLower === expectedLower) {
+          console.log(`⚡ Power state matched: ${currentLower}`);
+          hasAnyChange = true;
+        }
+      } else if (key === 'targetTemperatureC') {
+        // 温度可能有小数差异
+        if (Math.abs(currentValue - expectedValue) < 0.1) {
+          console.log(`🌡️ Temperature matched: ${currentValue}`);
+          hasAnyChange = true;
+        }
+      } else {
+        // 其他属性直接比较
+        if (currentValue?.toString().toLowerCase() === expectedValue?.toString().toLowerCase()) {
+          console.log(`🔄 ${key} matched: ${currentValue}`);
+          hasAnyChange = true;
+        }
+      }
+    }
+    
+    return hasAnyChange;
+  }
+
+  updateLoadingText(text) {
+    const loadingText = document.getElementById('loadingText');
+    if (loadingText) {
+      loadingText.textContent = text;
     }
   }
 
@@ -698,6 +797,13 @@ class ElectroluxController {
   }
 
   disableControls() {
+    document.querySelectorAll('.temp-btn, .mode-btn, .fan-btn, #swingToggle, #sleepToggle, .power-btn').forEach(btn => {
+      btn.disabled = true;
+    });
+  }
+
+  disableAllButtons() {
+    // 在执行命令期间禁用所有控制按钮
     document.querySelectorAll('.temp-btn, .mode-btn, .fan-btn, #swingToggle, #sleepToggle, .power-btn').forEach(btn => {
       btn.disabled = true;
     });
