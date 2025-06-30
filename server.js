@@ -1,10 +1,11 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const fs = require('fs').promises;
+const cron = require('node-cron');
 require('dotenv').config();
 
 const { ElectroluxAPI } = require('./lib/electrolux-api');
-const TokenStorage = require('./lib/token-storage');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -14,63 +15,155 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
 
-// Initialize token storage
-const tokenStorage = new TokenStorage();
 let electroluxAPI = null;
 
-// Initialize API client with token management
+// Initialize API client
 async function initializeAPI() {
   try {
-    // Load tokens from file first
-    await tokenStorage.loadTokens();
-    const storedTokens = tokenStorage.getTokens();
-    
-    // Use stored tokens if available, otherwise use environment variables
-    const accessToken = storedTokens.accessToken || process.env.ELECTROLUX_TOKEN;
-    const refreshToken = storedTokens.refreshToken || process.env.ELECTROLUX_REFRESH_TOKEN;
+    // Use environment variables directly
+    const accessToken = process.env.ELECTROLUX_TOKEN;
+    const refreshToken = process.env.ELECTROLUX_REFRESH_TOKEN;
     
     if (!accessToken) {
-      throw new Error('No access token available in storage or environment');
+      throw new Error('No access token available in environment');
     }
     
-    console.log('🔧 Initializing API client with stored tokens...');
+    console.log('🔧 Initializing API client...');
     electroluxAPI = new ElectroluxAPI(
       process.env.ELECTROLUX_API_KEY,
       accessToken,
       refreshToken
     );
     
-    // Set token expiry if we have it from storage
-    if (storedTokens.expiryTime) {
-      const expiresIn = Math.max(0, Math.floor((storedTokens.expiryTime - Date.now()) / 1000));
-      electroluxAPI.setTokenExpiry(expiresIn);
+    // Parse JWT to get expiry time
+    try {
+      const tokenParts = accessToken.split('.');
+      if (tokenParts.length === 3) {
+        const payload = JSON.parse(Buffer.from(tokenParts[1], 'base64').toString());
+        if (payload.exp) {
+          const expiresIn = payload.exp - Math.floor(Date.now() / 1000);
+          electroluxAPI.setTokenExpiry(expiresIn);
+        }
+      }
+    } catch (e) {
+      console.warn('Could not parse JWT token expiry');
     }
     
-    // Set up token refresh callback to save to file
+    // Set up token refresh callback to update .env file AND API client
     electroluxAPI.setTokenRefreshCallback(async (newAccessToken, newRefreshToken, expiresIn) => {
-      console.log('🔄 Token refreshed, saving to file...');
+      console.log('🔄 Token refreshed, updating .env file and API client...');
       try {
-        await tokenStorage.saveTokens(newAccessToken, newRefreshToken, expiresIn);
-        console.log('✅ New tokens saved to file successfully');
+        await updateEnvFile(newAccessToken, newRefreshToken);
+        console.log('✅ .env file updated successfully');
+        
+        // Update process.env in memory
+        process.env.ELECTROLUX_TOKEN = newAccessToken;
+        if (newRefreshToken) {
+          process.env.ELECTROLUX_REFRESH_TOKEN = newRefreshToken;
+        }
+        
+        // Update the current API client instance with new tokens
+        electroluxAPI.updateTokens(newAccessToken, newRefreshToken);
+        console.log('✅ API client tokens updated successfully');
+        
       } catch (error) {
-        console.error('❌ Failed to save tokens to file:', error.message);
+        console.error('❌ Failed to update tokens:', error.message);
       }
     });
     
     console.log('✅ API client initialized successfully');
     
-    // Log token status
-    const tokenInfo = tokenStorage.getTokenInfo();
-    console.log('📊 Token status:', {
-      hasTokens: tokenInfo.hasAccessToken && tokenInfo.hasRefreshToken,
-      expiresIn: tokenInfo.expiresInSeconds ? `${Math.floor(tokenInfo.expiresInSeconds / 60)} minutes` : 'unknown',
-      isExpired: tokenInfo.isExpired
-    });
+    // Start the token refresh scheduler
+    startTokenRefreshScheduler();
     
   } catch (error) {
     console.error('❌ Failed to initialize API client:', error.message);
     throw error;
   }
+}
+
+// Function to update .env file
+async function updateEnvFile(newAccessToken, newRefreshToken) {
+  const envPath = path.join(__dirname, '.env');
+  
+  try {
+    let envContent = await fs.readFile(envPath, 'utf8');
+    
+    // Update ELECTROLUX_TOKEN
+    envContent = envContent.replace(
+      /ELECTROLUX_TOKEN=.*/,
+      `ELECTROLUX_TOKEN=${newAccessToken}`
+    );
+    
+    // Update ELECTROLUX_REFRESH_TOKEN if provided
+    if (newRefreshToken) {
+      envContent = envContent.replace(
+        /ELECTROLUX_REFRESH_TOKEN=.*/,
+        `ELECTROLUX_REFRESH_TOKEN=${newRefreshToken}`
+      );
+    }
+    
+    await fs.writeFile(envPath, envContent, 'utf8');
+    console.log('📝 .env file has been updated with new tokens');
+  } catch (error) {
+    console.error('Error updating .env file:', error);
+    throw error;
+  }
+}
+
+// Automatic token refresh scheduler
+function startTokenRefreshScheduler() {
+  // Schedule task to run every 2 hours: "0 */2 * * *"
+  // This means: at minute 0 of every 2nd hour
+  const task = cron.schedule('0 */2 * * *', async () => {
+    console.log('🕐 Scheduled token refresh started...');
+    
+    if (!electroluxAPI) {
+      console.warn('⚠️ API client not initialized, skipping scheduled refresh');
+      return;
+    }
+
+    if (!process.env.ELECTROLUX_REFRESH_TOKEN) {
+      console.warn('⚠️ No refresh token available, skipping scheduled refresh');
+      return;
+    }
+
+    try {
+      await electroluxAPI.refreshAccessToken();
+      console.log('✅ Scheduled token refresh completed successfully');
+    } catch (error) {
+      console.error('❌ Scheduled token refresh failed:', error.message);
+      
+      // If it's a rate limiting error, that's expected behavior
+      if (error.message.includes('429')) {
+        console.log('ℹ️ Rate limited during scheduled refresh - this is normal if tokens were recently refreshed');
+      }
+    }
+  }, {
+    scheduled: false, // Don't start immediately
+    timezone: "UTC"
+  });
+
+  // Start the scheduled task
+  task.start();
+  console.log('⏰ Token refresh scheduler started - will refresh every 2 hours');
+  
+  return task;
+}
+
+// Manual token refresh function (can be called on-demand)
+async function performTokenRefresh() {
+  if (!electroluxAPI) {
+    throw new Error('API client not initialized');
+  }
+
+  if (!process.env.ELECTROLUX_REFRESH_TOKEN) {
+    throw new Error('No refresh token available');
+  }
+
+  console.log('🔄 Manual token refresh initiated...');
+  await electroluxAPI.refreshAccessToken();
+  console.log('✅ Manual token refresh completed');
 }
 
 // Middleware to ensure API is initialized
@@ -193,15 +286,43 @@ app.get('/api/health', (req, res) => {
 
 // Token status endpoint
 app.get('/api/token/status', (req, res) => {
-  const tokenInfo = tokenStorage.getTokenInfo();
+  let tokenInfo = {
+    hasAccessToken: !!process.env.ELECTROLUX_TOKEN,
+    hasRefreshToken: !!process.env.ELECTROLUX_REFRESH_TOKEN,
+    apiInitialized: !!electroluxAPI,
+    isExpired: false,
+    expiryTime: null,
+    expiresInSeconds: null,
+    expiresInMinutes: null
+  };
+
+  // Check token expiry if API is initialized
+  if (electroluxAPI) {
+    tokenInfo.isExpired = electroluxAPI.isTokenExpired();
+    
+    // Try to parse JWT to get expiry info
+    try {
+      const token = process.env.ELECTROLUX_TOKEN;
+      if (token) {
+        const tokenParts = token.split('.');
+        if (tokenParts.length === 3) {
+          const payload = JSON.parse(Buffer.from(tokenParts[1], 'base64').toString());
+          if (payload.exp) {
+            tokenInfo.expiryTime = new Date(payload.exp * 1000).toISOString();
+            const expiresInSeconds = payload.exp - Math.floor(Date.now() / 1000);
+            tokenInfo.expiresInSeconds = Math.max(0, expiresInSeconds);
+            tokenInfo.expiresInMinutes = Math.max(0, Math.floor(expiresInSeconds / 60));
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Error parsing token:', e);
+    }
+  }
   
   res.json({
     success: true,
-    data: {
-      ...tokenInfo,
-      apiInitialized: !!electroluxAPI,
-      expiresInMinutes: tokenInfo.expiresInSeconds ? Math.floor(tokenInfo.expiresInSeconds / 60) : null
-    },
+    data: tokenInfo,
     timestamp: new Date().toISOString()
   });
 });
@@ -209,7 +330,7 @@ app.get('/api/token/status', (req, res) => {
 // Manual token refresh endpoint
 app.post('/api/token/refresh', ensureAPIInitialized, async (req, res) => {
   try {
-    await electroluxAPI.refreshAccessToken();
+    await performTokenRefresh();
     res.json({
       success: true,
       message: 'Token refreshed successfully',

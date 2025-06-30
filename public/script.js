@@ -8,12 +8,12 @@ class ElectroluxController {
     this.currentMode = 'COOL'; // Default to COOL mode (valid according to API)
     this.currentFanSpeed = 'AUTO';
     this.alerts = [];
-    
+
     // Temperature adjustment debouncing
     this.temperatureDebounceTimer = null;
     this.pendingTemperature = null;
     this.isTemperatureAdjusting = false;
-    
+
     this.init();
   }
 
@@ -111,17 +111,17 @@ class ElectroluxController {
 
   async loadAppliances() {
     this.showLoading('加载设备列表...');
-    
+
     try {
       const response = await electroluxClient.getAppliances();
       const appliances = response.data || [];
-      
+
       // Auto-select first device or test device
       if (appliances.length > 0) {
         const testId = '950011716506019911110697';
         const testDevice = appliances.find(a => (a.applianceId || a.id) === testId);
         const selectedId = testDevice ? testId : (appliances[0].applianceId || appliances[0].id);
-        
+
         await this.selectAppliance(selectedId);
       } else {
         // If no appliances from API, use test device
@@ -163,11 +163,11 @@ class ElectroluxController {
       if (infoResponse.status === 'fulfilled') {
         const info = infoResponse.value.data;
         const applianceInfo = info.applianceInfo;
-        
+
         // Store device capabilities for dynamic UI control
         this.deviceCapabilities = info.capabilities;
         console.log('Device capabilities loaded:', this.deviceCapabilities);
-        
+
         deviceInfo = {
           applianceName: `${applianceInfo?.brand || 'ELECTROLUX'} ${applianceInfo?.model || '空调'}`,
           deviceType: applianceInfo?.deviceType,
@@ -182,7 +182,7 @@ class ElectroluxController {
       if (stateResponse.status === 'fulfilled') {
         const stateData = stateResponse.value.data;
         this.updateDeviceState(stateData);
-        
+
         // Get connection state from state data
         const topLevelConnectionState = stateData?.connectionState;
         const propertiesConnectivityState = stateData?.properties?.reported?.connectivityState;
@@ -200,7 +200,7 @@ class ElectroluxController {
 
       this.enableControls();
       this.showSuccess('设备加载成功');
-      
+
       // Ensure power button states are correct after enabling controls
       if (stateResponse.status === 'fulfilled') {
         const stateData = stateResponse.value.data;
@@ -221,15 +221,15 @@ class ElectroluxController {
 
   updateDeviceState(state) {
     this.currentState = state || {};
-    
+
     // Extract properties from the actual API response structure
     // API returns data directly, not under properties.reported
     const properties = state?.properties?.reported || state || {};
-    
+
     // Always use Celsius temperature
     const currentTemp = properties.ambientTemperatureC;
     const targetTemp = properties.targetTemperatureC || 24;
-    
+
     document.getElementById('currentTemp').textContent = currentTemp || '--';
     document.getElementById('targetTemp').textContent = targetTemp;
     this.targetTemperature = targetTemp;
@@ -238,28 +238,28 @@ class ElectroluxController {
     const mode = properties.mode ? properties.mode.toUpperCase() : 'COOL';
     this.currentMode = mode;
     this.updateModeButtons(mode.toUpperCase());
-    
+
     // Update power state based on applianceState (the actual device state)
     const applianceState = properties.applianceState;
     // Use applianceState as the source of truth for power status
     const actualPowerState = applianceState?.toLowerCase() === 'off' ? 'off' : 'running';
-    
+
     this.updatePowerButtons(actualPowerState);
-    
+
     // Update connection state - check multiple sources (case-insensitive)
     const topLevelConnectionState = state?.connectionState;
     const propertiesConnectivityState = properties.connectivityState;
-    const isConnected = 
-      topLevelConnectionState?.toLowerCase() === 'connected' || 
+    const isConnected =
+      topLevelConnectionState?.toLowerCase() === 'connected' ||
       propertiesConnectivityState?.toLowerCase() === 'connected';
-    
+
     // Update device info panel
     const deviceStatus = document.getElementById('deviceStatus');
     if (deviceStatus) {
       deviceStatus.textContent = isConnected ? '在线' : '离线';
       deviceStatus.className = `device-status ${isConnected ? 'online' : 'offline'}`;
     }
-    
+
     // Update header connection status
     this.updateConnectionStatus(isConnected, isConnected ? '设备已连接' : '设备未连接');
 
@@ -292,7 +292,7 @@ class ElectroluxController {
 
     if (deviceInfo) {
       deviceNameEl.textContent = deviceInfo.applianceName || '未知设备';
-      
+
       // Update online status with appropriate styling
       const isOnline = deviceInfo.connectionState?.toLowerCase() === 'connected';
       deviceOnlineStatusEl.textContent = isOnline ? '在线' : '离线';
@@ -308,7 +308,7 @@ class ElectroluxController {
     document.querySelectorAll('.mode-btn').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.mode === activeMode);
     });
-    
+
     // Update control availability based on current mode
     this.updateControlsAvailability(activeMode);
   }
@@ -322,7 +322,7 @@ class ElectroluxController {
       const speed = btn.dataset.speed;
       const isAllowed = restrictions.allowedFanSpeeds.includes(speed);
       const isReadonly = restrictions.fanSpeedReadonly;
-      
+
       if (!isAllowed || isReadonly) {
         btn.setAttribute('disabled', 'disabled');
         btn.classList.add('disabled');
@@ -363,10 +363,10 @@ class ElectroluxController {
   updatePowerButtons(powerState) {
     // Based on applianceState: 'off' = OFF, anything else = ON
     const isOn = powerState?.toLowerCase() !== 'off';
-    
+
     const powerOffBtn = document.getElementById('powerOff');
     const powerOnBtn = document.getElementById('powerOn');
-    
+
     if (isOn) {
       // Device is ON: only OFF button is clickable and active
       powerOffBtn.classList.add('active');
@@ -391,7 +391,7 @@ class ElectroluxController {
   updateSwingButton(isOn) {
     const btn = document.getElementById('swingToggle');
     const status = document.getElementById('swingStatus');
-    
+
     btn.classList.toggle('active', isOn);
     status.textContent = isOn ? '开启' : '关闭';
   }
@@ -399,7 +399,7 @@ class ElectroluxController {
   updateSleepModeButton(isOn) {
     const btn = document.getElementById('sleepToggle');
     const status = document.getElementById('sleepStatus');
-    
+
     btn.classList.toggle('active', isOn);
     status.textContent = isOn ? '开启' : '关闭';
   }
@@ -408,30 +408,30 @@ class ElectroluxController {
     // Extract properties from actual API response structure
     // API returns data directly, not under properties.reported
     const properties = state?.properties?.reported || state || {};
-    
+
     // Power status based on applianceState (the actual device state)
     const applianceState = properties.applianceState;
     // Device is ON if applianceState is not 'off'
     const isPowerOn = applianceState?.toLowerCase() !== 'off';
     document.getElementById('powerStatus').textContent = isPowerOn ? '开机' : '关机';
-    
+
     // Update power status color
     const powerStatusElement = document.getElementById('powerStatus');
     powerStatusElement.style.color = isPowerOn ? '#10b981' : '#ef4444';
     powerStatusElement.style.fontWeight = 'bold';
-    
+
     // Mode status
-    document.getElementById('modeStatus').textContent = 
+    document.getElementById('modeStatus').textContent =
       ElectroluxClient.formatMode(properties.mode);
-    
+
     // Fan setting (what user requested)
-    document.getElementById('fanStatus').textContent = 
+    document.getElementById('fanStatus').textContent =
       ElectroluxClient.formatFanSpeed(properties.fanSpeedSetting);
-    
+
     // Actual fan speed state (if available)
-    document.getElementById('fanStateStatus').textContent = 
+    document.getElementById('fanStateStatus').textContent =
       properties.fanSpeedState ? ElectroluxClient.formatFanSpeed(properties.fanSpeedState) : '跟随设置';
-    
+
     // Swing status - might not exist in all devices
     const swingStatusElement = document.getElementById('swingStatusDisplay');
     const swingValue = properties.verticalSwing;
@@ -439,7 +439,7 @@ class ElectroluxController {
     swingStatusElement.textContent = ElectroluxClient.formatSwing(swingValue);
     swingStatusElement.style.color = isSwingOn ? '#10b981' : '#6b7280';
     swingStatusElement.style.fontWeight = 'bold';
-    
+
     // Sleep mode status - confirmed in API example
     const sleepModeElement = document.getElementById('sleepModeStatus');
     const sleepModeValue = properties.sleepMode;
@@ -447,32 +447,32 @@ class ElectroluxController {
     sleepModeElement.textContent = ElectroluxClient.formatSleepMode(sleepModeValue);
     sleepModeElement.style.color = isSleepOn ? '#10b981' : '#6b7280';
     sleepModeElement.style.fontWeight = 'bold';
-    
+
     // Alert status
-    document.getElementById('alertStatus').textContent = 
+    document.getElementById('alertStatus').textContent =
       this.alerts.length > 0 ? `${this.alerts.length} 个告警` : '正常';
-    
+
     // Network quality from networkInterface
     const networkQuality = properties.networkInterface?.linkQualityIndicator;
-    document.getElementById('networkQuality').textContent = 
+    document.getElementById('networkQuality').textContent =
       ElectroluxClient.formatNetworkQuality(networkQuality);
-    
+
     // Connection status - check both connectionState and connectivityState (case-insensitive)
     const connectionState = state?.connectionState;
     const connectivityState = properties.connectivityState;
-    const isConnected = 
-      connectionState?.toLowerCase() === 'connected' || 
+    const isConnected =
+      connectionState?.toLowerCase() === 'connected' ||
       connectivityState?.toLowerCase() === 'connected';
-    
+
     const connectionStatusElement = document.getElementById('deviceConnectionStatus');
     connectionStatusElement.textContent = isConnected ? '在线' : '离线';
     connectionStatusElement.style.color = isConnected ? '#10b981' : '#ef4444';
     connectionStatusElement.style.fontWeight = 'bold';
-    
+
     // Last update timestamp
-    document.getElementById('lastUpdate').textContent = 
+    document.getElementById('lastUpdate').textContent =
       ElectroluxClient.formatTimestamp(new Date().toISOString());
-    
+
     // Log state changes for debugging (API raw data only)
     console.log('📊 API State Data:', {
       mode: properties.mode,
@@ -486,7 +486,7 @@ class ElectroluxController {
   updateAlertsDisplay() {
     const alertsSection = document.getElementById('alertsSection');
     const alertsContainer = document.getElementById('alertsContainer');
-    
+
     if (this.alerts.length === 0) {
       alertsSection.style.display = 'none';
       alertsContainer.innerHTML = `
@@ -520,13 +520,13 @@ class ElectroluxController {
       const currentMode = this.getCurrentDeviceMode();
       const currentTemp = properties.targetTemperatureC || this.targetTemperature;
       const currentFanSpeed = properties.fanSpeedSetting || 'AUTO';
-      
+
       console.log('🔄 Using current device settings for power on:', {
         mode: currentMode,
         temperature: currentTemp,
         fanSpeed: currentFanSpeed
       });
-      
+
       try {
         // First try: executeCommand ON only
         await this.sendCommand({
@@ -557,14 +557,14 @@ class ElectroluxController {
   getCurrentDeviceMode() {
     const properties = this.currentState?.properties?.reported || this.currentState || {};
     const currentMode = properties.mode;
-    
+
     console.log('📋 Getting current device mode:', currentMode);
-    
+
     // If device is OFF or mode is invalid, use COOL as fallback
     if (!currentMode || currentMode === 'OFF') {
       return 'COOL';
     }
-    
+
     return currentMode.toUpperCase();
   }
 
@@ -572,28 +572,28 @@ class ElectroluxController {
     // Temperature range based on actual device capabilities
     const minTemp = 16;
     const maxTemp = 32;
-    
+
     const newTemp = Math.max(minTemp, Math.min(maxTemp, this.targetTemperature + delta));
     if (newTemp === this.targetTemperature) return;
 
     // Update target temperature immediately for UI responsiveness
     this.targetTemperature = newTemp;
     this.pendingTemperature = newTemp;
-    
+
     // Update display immediately
     document.getElementById('targetTemp').textContent = newTemp;
-    
+
     // Show visual feedback if not already adjusting
     if (!this.isTemperatureAdjusting) {
       this.isTemperatureAdjusting = true;
       this.showTemperatureAdjusting();
     }
-    
+
     // Clear previous timer and set new one
     if (this.temperatureDebounceTimer) {
       clearTimeout(this.temperatureDebounceTimer);
     }
-    
+
     // Set new timer to execute command after user stops clicking (500ms)
     this.temperatureDebounceTimer = setTimeout(async () => {
       await this.executeTemperatureCommand();
@@ -602,10 +602,10 @@ class ElectroluxController {
 
   async executeTemperatureCommand() {
     if (!this.pendingTemperature || !this.isTemperatureAdjusting) return;
-    
+
     const targetTemp = this.pendingTemperature;
     const previousTemp = this.targetTemperature;
-    
+
     try {
       // Send only temperature parameter - device rejects multiple parameters
       const command = {
@@ -613,12 +613,12 @@ class ElectroluxController {
       };
 
       await this.sendCommand(command, `设置温度为 ${targetTemp}°C`);
-      
+
       // Wait and verify temperature change
       await this.waitForTemperatureChange(targetTemp, 15000);
-      
+
       this.showSuccess(`温度已设置为 ${targetTemp}°C`);
-      
+
     } catch (error) {
       console.error('Temperature change failed:', error);
       this.showError(`温度设置失败: ${error.message}`);
@@ -640,7 +640,7 @@ class ElectroluxController {
       tempDisplay.classList.add('loading');
       tempDisplay.style.opacity = '0.8';
     }
-    
+
     // Disable temperature controls to prevent rapid clicking
     const tempControls = ['tempDown', 'tempUp'];
     tempControls.forEach(id => {
@@ -658,7 +658,7 @@ class ElectroluxController {
       tempDisplay.classList.remove('loading');
       tempDisplay.style.opacity = '1';
     }
-    
+
     // Re-enable temperature controls
     const tempControls = ['tempDown', 'tempUp'];
     tempControls.forEach(id => {
@@ -674,23 +674,23 @@ class ElectroluxController {
   async waitForTemperatureChange(expectedTemp, timeout = 15000) {
     const startTime = Date.now();
     const checkInterval = 1000; // Check every 1 second
-    
+
     while (Date.now() - startTime < timeout) {
       try {
         const state = await electroluxClient.getApplianceState(this.currentApplianceId);
         const currentTemp = state.data?.properties?.reported?.targetTemperatureC || state.data?.targetTemperatureC;
-        
+
         if (currentTemp === expectedTemp) {
           console.log(`✅ Temperature successfully changed to ${expectedTemp}°C`);
           return true;
         }
-        
+
         await new Promise(resolve => setTimeout(resolve, checkInterval));
       } catch (error) {
         console.warn('Error checking temperature change:', error);
       }
     }
-    
+
     throw new Error(`Temperature change to ${expectedTemp}°C did not complete within ${timeout}ms`);
   }
 
@@ -699,37 +699,37 @@ class ElectroluxController {
     if (upperMode === this.currentMode) return;
 
     const previousMode = this.currentMode;
-    
+
     // Show loading state immediately
     this.showModeLoading(upperMode);
-    
+
     try {
       // Get current device state and capabilities
       const currentState = await electroluxClient.getApplianceState(this.currentApplianceId);
       const currentProperties = currentState.data?.properties?.reported || currentState.data || {};
-      
+
       // Get fresh capabilities for the target mode
       const modeRestrictions = await this.getModeRestrictions(upperMode, true);
-      
+
       // Build optimal command based on capabilities and current state
       const command = await this.buildOptimalModeCommand(upperMode, currentProperties, modeRestrictions);
-      
+
       // Send the optimized command
       await this.sendCommandSilent(command);
-      
+
       // Wait and verify mode change
       const actualMode = await this.waitForModeChange(upperMode);
-      
+
       // Update current mode after successful change (use actual mode if different)
       const finalMode = typeof actualMode === 'string' ? actualMode : upperMode;
       this.currentMode = finalMode;
-      
+
       if (finalMode === upperMode) {
         this.showSuccess(`模式已切换为 ${ElectroluxClient.formatMode(finalMode)}`);
       } else {
         this.showWarning(`设备自动选择了 ${ElectroluxClient.formatMode(finalMode)} 模式（而非 ${ElectroluxClient.formatMode(upperMode)}）`);
       }
-      
+
     } catch (error) {
       console.error('Mode change failed:', error);
       this.showError(`模式切换失败: ${error.message}`);
@@ -744,10 +744,10 @@ class ElectroluxController {
 
   async buildOptimalModeCommand(targetMode, currentProperties, modeRestrictions) {
     const command = { mode: targetMode };
-    
+
     // Only add additional parameters if they're allowed in the target mode
     // and if they differ from current device state
-    
+
     // Add temperature if it's allowed and we have a target temperature
     if (!modeRestrictions.temperatureDisabled && this.targetTemperature) {
       const currentTemp = currentProperties.targetTemperatureC;
@@ -755,16 +755,16 @@ class ElectroluxController {
         command.targetTemperatureC = this.targetTemperature;
       }
     }
-    
+
     // Add fan speed if it's writable in the target mode
     if (!modeRestrictions.fanSpeedReadonly && this.currentFanSpeed) {
       const currentFanSpeed = currentProperties.fanSpeedSetting?.toUpperCase();
-      if (currentFanSpeed !== this.currentFanSpeed && 
+      if (currentFanSpeed !== this.currentFanSpeed &&
           modeRestrictions.allowedFanSpeeds.includes(this.currentFanSpeed)) {
         command.fanSpeedSetting = this.currentFanSpeed;
       }
     }
-    
+
     // If command has multiple parameters, check if device supports multi-parameter commands
     const paramCount = Object.keys(command).length;
     if (paramCount > 1) {
@@ -772,7 +772,7 @@ class ElectroluxController {
       // Return only mode for now, let device handle other parameters automatically
       return { mode: targetMode };
     }
-    
+
     return command;
   }
 
@@ -802,7 +802,7 @@ class ElectroluxController {
   getModeIcon(mode) {
     const icons = {
       'AUTO': 'fas fa-magic',
-      'COOL': 'fas fa-snowflake', 
+      'COOL': 'fas fa-snowflake',
       'HEAT': 'fas fa-fire',
       'DRY': 'fas fa-tint',
       'FANONLY': 'fas fa-wind'
@@ -814,35 +814,35 @@ class ElectroluxController {
     const startTime = Date.now();
     const checkInterval = 1000; // Check every 1 second
     let lastKnownMode = null;
-    
+
     console.log(`🔄 Waiting for mode change to ${expectedMode}...`);
-    
+
     while (Date.now() - startTime < timeout) {
       try {
         const state = await electroluxClient.getApplianceState(this.currentApplianceId);
         const currentMode = (state.data?.properties?.reported?.mode || state.data?.mode)?.toUpperCase();
-        
+
         if (lastKnownMode !== currentMode) {
           console.log(`📱 Device mode is now: ${currentMode}`);
           lastKnownMode = currentMode;
         }
-        
+
         if (currentMode === expectedMode) {
           console.log(`✅ Mode successfully changed to ${expectedMode}`);
           return true;
         }
-        
+
         await new Promise(resolve => setTimeout(resolve, checkInterval));
       } catch (error) {
         console.warn('Error checking mode change:', error);
         await new Promise(resolve => setTimeout(resolve, checkInterval));
       }
     }
-    
+
     // If we get here, the mode change didn't complete as expected
     const finalState = await electroluxClient.getApplianceState(this.currentApplianceId);
     const finalMode = (finalState.data?.properties?.reported?.mode || finalState.data?.mode)?.toUpperCase();
-    
+
     if (finalMode !== expectedMode) {
       console.log(`⚠️ Mode change timeout. Expected: ${expectedMode}, Actual: ${finalMode}`);
       // Don't throw error if device chose a different mode - this might be intentional
@@ -851,7 +851,7 @@ class ElectroluxController {
         return finalMode; // Return the actual mode instead of throwing
       }
     }
-    
+
     throw new Error(`Mode change to ${expectedMode} did not complete within ${timeout}ms. Device is in ${finalMode} mode.`);
   }
 
@@ -882,13 +882,44 @@ class ElectroluxController {
 
   getDefaultModeRestrictions(mode) {
     const defaultRestrictions = {
-      'FANONLY': { fanSpeedReadonly: false, temperatureDisabled: true, sleepModeDisabled: true },
-      'DRY': { fanSpeedReadonly: true, temperatureDisabled: true, sleepModeDisabled: true },
-      'AUTO': { fanSpeedReadonly: true, temperatureDisabled: false, sleepModeDisabled: false },
-      'COOL': { fanSpeedReadonly: false, temperatureDisabled: false, sleepModeDisabled: false },
-      'HEAT': { fanSpeedReadonly: false, temperatureDisabled: false, sleepModeDisabled: false }
+      'FANONLY': { 
+        fanSpeedReadonly: false, 
+        temperatureDisabled: true, 
+        sleepModeDisabled: true,
+        allowedFanSpeeds: ['AUTO', 'HIGH', 'LOW', 'MIDDLE']
+      },
+      'DRY': { 
+        fanSpeedReadonly: true, 
+        temperatureDisabled: true, 
+        sleepModeDisabled: true,
+        allowedFanSpeeds: ['AUTO']
+      },
+      'AUTO': { 
+        fanSpeedReadonly: true, 
+        temperatureDisabled: false, 
+        sleepModeDisabled: false,
+        allowedFanSpeeds: ['AUTO']
+      },
+      'COOL': { 
+        fanSpeedReadonly: false, 
+        temperatureDisabled: false, 
+        sleepModeDisabled: false,
+        allowedFanSpeeds: ['AUTO', 'HIGH', 'LOW', 'MIDDLE']
+      },
+      'HEAT': { 
+        fanSpeedReadonly: false, 
+        temperatureDisabled: false, 
+        sleepModeDisabled: false,
+        allowedFanSpeeds: ['AUTO', 'HIGH', 'LOW', 'MIDDLE']
+      }
     };
-    return defaultRestrictions[mode] || defaultRestrictions['COOL'];
+    const defaults = defaultRestrictions[mode] || defaultRestrictions['COOL'];
+    return {
+      fanSpeedReadonly: defaults.fanSpeedReadonly || false,
+      temperatureDisabled: defaults.temperatureDisabled || false,
+      sleepModeDisabled: defaults.sleepModeDisabled || false,
+      allowedFanSpeeds: defaults.allowedFanSpeeds || ['AUTO', 'HIGH', 'LOW', 'MIDDLE']
+    };
   }
 
   parseCapabilitiesForMode(mode) {
@@ -904,11 +935,11 @@ class ElectroluxController {
     if (capabilities.mode && capabilities.mode.triggers) {
       for (const trigger of capabilities.mode.triggers) {
         const condition = trigger.condition;
-        
+
         // Check if this trigger applies to the specified mode
         if (condition.operand_2 === mode && condition.operator === 'eq') {
           const actions = trigger.action;
-          
+
           // Parse fanSpeedSetting restrictions
           if (actions.fanSpeedSetting) {
             restrictions.fanSpeedReadonly = actions.fanSpeedSetting.access === 'read';
@@ -916,17 +947,17 @@ class ElectroluxController {
               restrictions.allowedFanSpeeds = Object.keys(actions.fanSpeedSetting.values);
             }
           }
-          
+
           // Parse temperature restrictions
           if (actions.targetTemperatureC) {
             restrictions.temperatureDisabled = actions.targetTemperatureC.disabled === true;
           }
-          
+
           // Parse sleep mode restrictions
           if (actions.sleepMode) {
             restrictions.sleepModeDisabled = actions.sleepMode.disabled === true;
           }
-          
+
           break;
         }
       }
@@ -975,10 +1006,10 @@ class ElectroluxController {
     }
 
     const previousSpeed = this.currentFanSpeed;
-    
+
     // Show loading state immediately
     this.showFanSpeedLoading(upperSpeed);
-    
+
     try {
       // Send only fan speed parameter - device rejects multiple parameters
       const command = {
@@ -986,14 +1017,14 @@ class ElectroluxController {
       };
 
       await this.sendCommand(command, `设置风速为 ${ElectroluxClient.formatFanSpeed(upperSpeed)}`);
-      
+
       // Wait and verify fan speed change
       await this.waitForFanSpeedChange(upperSpeed, 5000);
-      
+
       // Update fan speed after successful change
       this.currentFanSpeed = upperSpeed;
       this.showSuccess(`风速已设置为 ${ElectroluxClient.formatFanSpeed(upperSpeed)}`);
-      
+
     } catch (error) {
       console.error('Fan speed change failed:', error);
       this.showError(`风速设置失败: ${error.message}`);
@@ -1034,23 +1065,23 @@ class ElectroluxController {
   async waitForFanSpeedChange(expectedSpeed, timeout = 15000) {
     const startTime = Date.now();
     const checkInterval = 1000; // Check every 1 second
-    
+
     while (Date.now() - startTime < timeout) {
       try {
         const state = await electroluxClient.getApplianceState(this.currentApplianceId);
         const currentSpeed = (state.data?.properties?.reported?.fanSpeedSetting || state.data?.fanSpeedSetting)?.toUpperCase();
-        
+
         if (currentSpeed === expectedSpeed) {
           console.log(`✅ Fan speed successfully changed to ${expectedSpeed}`);
           return true;
         }
-        
+
         await new Promise(resolve => setTimeout(resolve, checkInterval));
       } catch (error) {
         console.warn('Error checking fan speed change:', error);
       }
     }
-    
+
     throw new Error(`Fan speed change to ${expectedSpeed} did not complete within ${timeout}ms`);
   }
 
@@ -1062,7 +1093,7 @@ class ElectroluxController {
     await this.sendCommand({
       verticalSwing: this.isSwingOn ? 'ON' : 'OFF'
     }, `${this.isSwingOn ? '开启' : '关闭'}摆风`);
-    
+
     // Also update status display immediately since API might not return verticalSwing
     const swingStatusElement = document.getElementById('swingStatusDisplay');
     swingStatusElement.textContent = this.isSwingOn ? '开启' : '关闭';
@@ -1092,10 +1123,10 @@ class ElectroluxController {
 
     try {
       const response = await electroluxClient.controlAppliance(this.currentApplianceId, command);
-      
+
       // Wait for state change with polling
       await this.waitForStateChange(command, description);
-      
+
       this.showSuccess(`${description}成功`);
     } catch (error) {
       console.error('Command failed:', error);
@@ -1113,16 +1144,16 @@ class ElectroluxController {
 
     try {
       const response = await electroluxClient.controlAppliance(this.currentApplianceId, command);
-      
+
       if (!response.success) {
         throw new Error(response.error?.details || '命令发送失败');
       }
-      
+
       console.log('✅ Silent command sent successfully:', command);
-      
+
       // Wait for state changes to propagate
       await new Promise(resolve => setTimeout(resolve, 500));
-      
+
       return response;
     } catch (error) {
       console.error('❌ Silent command failed:', error);
@@ -1133,69 +1164,69 @@ class ElectroluxController {
   async waitForStateChange(command, description) {
     const maxAttempts = 10; // 最多等待50秒 (5秒 x 10次)
     const delayBetweenAttempts = 5000; // 每5秒检查一次
-    
+
     // 记录预期的状态变化
     const expectedChanges = this.getExpectedStateChanges(command);
-    
+
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      
+
       // 等待一段时间让设备状态更新
       await new Promise(resolve => setTimeout(resolve, delayBetweenAttempts));
-      
+
       try {
         // 获取最新状态
         const response = await electroluxClient.getApplianceState(this.currentApplianceId);
         const newState = response.data;
         const properties = newState?.properties?.reported || newState || {};
-        
+
         // 检查是否发生了预期的状态变化
         if (this.hasStateChanged(properties, expectedChanges)) {
           this.updateDeviceState(newState);
           return; // 状态已改变，退出等待
         }
-        
+
         // 更新loading消息显示进度
         this.updateLoadingText(`${description}... (${attempt * 5}秒)`);
-        
+
       } catch (error) {
         console.warn(`Failed to check state on attempt ${attempt}:`, error.message);
       }
     }
-    
+
     // 超时后最后刷新一次状态
     await this.refreshStatus(false);
   }
 
   getExpectedStateChanges(command) {
     const changes = {};
-    
+
     if (command.executeCommand === 'OFF') {
       changes.applianceState = 'off';
     } else if (command.executeCommand === 'ON' || command.mode) {
       changes.applianceState = 'running';
     }
-    
+
     if (command.mode) {
       changes.mode = command.mode.toUpperCase();
     }
-    
+
     if (command.targetTemperatureC) {
       changes.targetTemperatureC = command.targetTemperatureC;
     }
-    
+
     if (command.fanSpeedSetting) {
       changes.fanSpeedSetting = command.fanSpeedSetting.toUpperCase();
     }
-    
+
     return changes;
   }
 
   hasStateChanged(currentProperties, expectedChanges) {
     let hasAnyChange = false;
-    
+
     for (const [key, expectedValue] of Object.entries(expectedChanges)) {
       const currentValue = currentProperties[key];
-      
+
       if (key === 'applianceState') {
         // 特殊处理电源状态
         const currentLower = currentValue?.toLowerCase();
@@ -1218,7 +1249,7 @@ class ElectroluxController {
         }
       }
     }
-    
+
     return hasAnyChange;
   }
 
@@ -1242,9 +1273,9 @@ class ElectroluxController {
         topLevel: response.data?.connectionState,
         inProperties: response.data?.properties?.reported?.connectivityState
       });
-      
+
       this.updateDeviceState(response.data);
-      
+
       if (showMessage) this.showSuccess('状态已更新');
     } catch (error) {
       console.error('Failed to refresh status:', error);
@@ -1279,7 +1310,7 @@ class ElectroluxController {
   updateConnectionStatus(connected, message) {
     const statusDot = document.querySelector('.status-dot');
     const statusText = document.querySelector('.status-text');
-    
+
     statusDot.className = `status-dot ${connected ? 'online' : 'offline'}`;
     statusText.textContent = message;
   }
@@ -1309,9 +1340,9 @@ class ElectroluxController {
     try {
       const response = await electroluxClient.getTokenStatus();
       const tokenData = response.data;
-      
+
       this.updateTokenStatusDisplay(tokenData);
-      
+
       if (showMessage) this.showSuccess('Token状态已更新');
     } catch (error) {
       console.error('Failed to refresh token status:', error);
@@ -1323,6 +1354,7 @@ class ElectroluxController {
   }
 
   updateTokenStatusDisplay(tokenData) {
+    console.log(tokenData);
     const accessTokenStatus = document.getElementById('accessTokenStatus');
     const tokenTimeLeft = document.getElementById('tokenTimeLeft');
     const manualRefreshBtn = document.getElementById('manualRefreshToken');
@@ -1332,10 +1364,10 @@ class ElectroluxController {
       // Error state
       accessTokenStatus.textContent = '检查失败';
       accessTokenStatus.className = 'token-status invalid';
-      
+
       tokenTimeLeft.textContent = '未知';
       tokenTimeLeft.className = 'token-status invalid';
-      
+
       manualRefreshBtn.disabled = true;
       return;
     }
@@ -1371,13 +1403,13 @@ class ElectroluxController {
 
     // Manual refresh button and help
     manualRefreshBtn.disabled = !tokenData.hasRefreshToken || !tokenData.apiInitialized || tokenData.isRefreshTokenExpired;
-    
+
     // Show help if refresh token is missing or expired
     if (tokenData.hasRefreshToken && !tokenData.isRefreshTokenExpired) {
       tokenHelp.style.display = 'none';
     } else {
       tokenHelp.style.display = 'block';
-      
+
       // Update help message based on the issue
       const helpText = tokenHelp.querySelector('.help-text p');
       if (!tokenData.hasRefreshToken) {
@@ -1394,21 +1426,32 @@ class ElectroluxController {
     try {
       const response = await electroluxClient.refreshToken();
       this.showSuccess('Token刷新成功');
-      
+
       // Refresh token status display
       setTimeout(() => {
         this.refreshTokenStatus(false);
       }, 1000);
-      
+
     } catch (error) {
       console.error('Manual token refresh failed:', error);
+
+      // Extract detailed error information
+      let errorMessage = 'Token刷新失败';
       
-      // Show specific error message for missing refresh token
-      if (error.message.includes('refresh token')) {
-        this.showError('无法刷新Token: 缺少刷新令牌。请在.env文件中配置ELECTROLUX_REFRESH_TOKEN');
+      if (error.message.includes('429')) {
+        errorMessage = 'Token刷新失败: 请求过于频繁，请稍后再试';
+      } else if (error.message.includes('401')) {
+        errorMessage = 'Token刷新失败: 认证失败，可能需要重新获取refresh token';
+      } else if (error.message.includes('400')) {
+        errorMessage = 'Token刷新失败: 请求无效，请检查token格式';
+      } else if (error.message.includes('No refresh token available')) {
+        errorMessage = '无法刷新Token: 缺少刷新令牌。请在.env文件中配置ELECTROLUX_REFRESH_TOKEN';
       } else {
-        this.showError('Token刷新失败: ' + error.message);
+        // Show the full error message for debugging
+        errorMessage = `Token刷新失败: ${error.message}`;
       }
+      
+      this.showError(errorMessage);
     } finally {
       this.hideLoading();
     }
@@ -1436,7 +1479,7 @@ class ElectroluxController {
   showLoading(text = '处理中...') {
     const overlay = document.getElementById('loadingOverlay');
     const loadingText = document.getElementById('loadingText');
-    
+
     loadingText.textContent = text;
     overlay.style.display = 'flex';
   }
@@ -1455,16 +1498,16 @@ class ElectroluxController {
 
   showMessage(message, type) {
     const container = document.getElementById(`${type}Container`);
-    
+
     const messageDiv = document.createElement('div');
     messageDiv.className = `${type}-message`;
     messageDiv.innerHTML = `
       <span>${message}</span>
       <button class="close-btn" onclick="this.parentElement.remove()">×</button>
     `;
-    
+
     container.appendChild(messageDiv);
-    
+
     // Auto-remove after 5 seconds
     setTimeout(() => {
       if (messageDiv.parentElement) {

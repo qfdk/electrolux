@@ -19,11 +19,13 @@ class ElectroluxClient {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error?.message || `HTTP ${response.status}: ${response.statusText}`);
+        const errorMessage = data?.error?.details || data?.error?.message || `HTTP ${response.status}: ${response.statusText}`;
+        throw new Error(errorMessage);
       }
 
       if (!data.success) {
-        throw new Error(data.error?.message || 'API request failed');
+        const errorMessage = data?.error?.details || data?.error?.message || 'API request failed';
+        throw new Error(errorMessage);
       }
 
       console.log(`✅ API Success: ${endpoint}`);
