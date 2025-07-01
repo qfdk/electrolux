@@ -83,42 +83,6 @@ class ElectroluxClient {
 
 
 
-  // Utility methods for command formatting
-  static createTemperatureCommand(temperature, mode = null, fanSpeed = null, swing = null) {
-    const command = { targetTemperatureC: temperature };
-    
-    if (mode) command.mode = mode;
-    if (fanSpeed) command.fanSpeedSetting = fanSpeed;
-    if (swing !== null) command.verticalSwing = swing ? 'ON' : 'OFF';
-    
-    return command;
-  }
-
-  static createModeCommand(mode, temperature = null, fanSpeed = null) {
-    const command = { mode };
-    
-    if (temperature) command.targetTemperatureC = temperature;
-    if (fanSpeed) command.fanSpeedSetting = fanSpeed;
-    
-    return command;
-  }
-
-  static createFanSpeedCommand(fanSpeed, mode = null, temperature = null) {
-    const command = { fanSpeedSetting: fanSpeed };
-    
-    if (mode) command.mode = mode;
-    if (temperature) command.targetTemperatureC = temperature;
-    
-    return command;
-  }
-
-  static createSwingCommand(swing, mode = null) {
-    const command = { verticalSwing: swing ? 'ON' : 'OFF' };
-    
-    if (mode) command.mode = mode;
-    
-    return command;
-  }
 
   // Formatting utilities
   static formatTemperature(celsius) {

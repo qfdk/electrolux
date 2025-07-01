@@ -1496,6 +1496,10 @@ class ElectroluxController {
     this.showMessage(message, 'success');
   }
 
+  showWarning(message) {
+    this.showMessage(message, 'warning');
+  }
+
   showMessage(message, type) {
     const container = document.getElementById(`${type}Container`);
 

@@ -23,18 +23,18 @@ async function initializeAPI() {
     // Use environment variables directly
     const accessToken = process.env.ELECTROLUX_TOKEN;
     const refreshToken = process.env.ELECTROLUX_REFRESH_TOKEN;
-    
+
     if (!accessToken) {
       throw new Error('No access token available in environment');
     }
-    
+
     console.log('🔧 Initializing API client...');
     electroluxAPI = new ElectroluxAPI(
       process.env.ELECTROLUX_API_KEY,
       accessToken,
       refreshToken
     );
-    
+
     // Parse JWT to get expiry time
     try {
       const tokenParts = accessToken.split('.');
@@ -48,34 +48,34 @@ async function initializeAPI() {
     } catch (e) {
       console.warn('Could not parse JWT token expiry');
     }
-    
+
     // Set up token refresh callback to update .env file AND API client
     electroluxAPI.setTokenRefreshCallback(async (newAccessToken, newRefreshToken, expiresIn) => {
       console.log('🔄 Token refreshed, updating .env file and API client...');
       try {
         await updateEnvFile(newAccessToken, newRefreshToken);
         console.log('✅ .env file updated successfully');
-        
+
         // Update process.env in memory
         process.env.ELECTROLUX_TOKEN = newAccessToken;
         if (newRefreshToken) {
           process.env.ELECTROLUX_REFRESH_TOKEN = newRefreshToken;
         }
-        
+
         // Update the current API client instance with new tokens
         electroluxAPI.updateTokens(newAccessToken, newRefreshToken);
         console.log('✅ API client tokens updated successfully');
-        
+
       } catch (error) {
         console.error('❌ Failed to update tokens:', error.message);
       }
     });
-    
+
     console.log('✅ API client initialized successfully');
-    
+
     // Start the token refresh scheduler
     startTokenRefreshScheduler();
-    
+
   } catch (error) {
     console.error('❌ Failed to initialize API client:', error.message);
     throw error;
@@ -85,16 +85,16 @@ async function initializeAPI() {
 // Function to update .env file
 async function updateEnvFile(newAccessToken, newRefreshToken) {
   const envPath = path.join(__dirname, '.env');
-  
+
   try {
     let envContent = await fs.readFile(envPath, 'utf8');
-    
+
     // Update ELECTROLUX_TOKEN
     envContent = envContent.replace(
       /ELECTROLUX_TOKEN=.*/,
       `ELECTROLUX_TOKEN=${newAccessToken}`
     );
-    
+
     // Update ELECTROLUX_REFRESH_TOKEN if provided
     if (newRefreshToken) {
       envContent = envContent.replace(
@@ -102,7 +102,7 @@ async function updateEnvFile(newAccessToken, newRefreshToken) {
         `ELECTROLUX_REFRESH_TOKEN=${newRefreshToken}`
       );
     }
-    
+
     await fs.writeFile(envPath, envContent, 'utf8');
     console.log('📝 .env file has been updated with new tokens');
   } catch (error) {
@@ -117,7 +117,7 @@ function startTokenRefreshScheduler() {
   // This means: at minute 0 of every 2nd hour
   const task = cron.schedule('0 */2 * * *', async () => {
     console.log('🕐 Scheduled token refresh started...');
-    
+
     if (!electroluxAPI) {
       console.warn('⚠️ API client not initialized, skipping scheduled refresh');
       return;
@@ -133,7 +133,7 @@ function startTokenRefreshScheduler() {
       console.log('✅ Scheduled token refresh completed successfully');
     } catch (error) {
       console.error('❌ Scheduled token refresh failed:', error.message);
-      
+
       // If it's a rate limiting error, that's expected behavior
       if (error.message.includes('429')) {
         console.log('ℹ️ Rate limited during scheduled refresh - this is normal if tokens were recently refreshed');
@@ -147,7 +147,7 @@ function startTokenRefreshScheduler() {
   // Start the scheduled task
   task.start();
   console.log('⏰ Token refresh scheduler started - will refresh every 2 hours');
-  
+
   return task;
 }
 
@@ -193,8 +193,8 @@ app.get('/api/appliances', ensureAPIInitialized, async (req, res) => {
     res.json({ success: true, data: appliances, timestamp: new Date().toISOString() });
   } catch (error) {
     console.error('Error getting appliances:', error.message);
-    res.status(500).json({ 
-      success: false, 
+    res.status(500).json({
+      success: false,
       error: {
         code: 'API_ERROR',
         message: 'Failed to get appliances',
@@ -210,8 +210,8 @@ app.get('/api/appliances/:id/info', ensureAPIInitialized, async (req, res) => {
     res.json({ success: true, data: info, timestamp: new Date().toISOString() });
   } catch (error) {
     console.error('Error getting appliance info:', error.message);
-    res.status(500).json({ 
-      success: false, 
+    res.status(500).json({
+      success: false,
       error: {
         code: 'API_ERROR',
         message: 'Failed to get appliance info',
@@ -227,8 +227,8 @@ app.get('/api/appliances/:id/state', ensureAPIInitialized, async (req, res) => {
     res.json({ success: true, data: state, timestamp: new Date().toISOString() });
   } catch (error) {
     console.error('Error getting appliance state:', error.message);
-    res.status(500).json({ 
-      success: false, 
+    res.status(500).json({
+      success: false,
       error: {
         code: 'API_ERROR',
         message: 'Failed to get appliance state',
@@ -244,8 +244,8 @@ app.get('/api/appliances/:id/capabilities', ensureAPIInitialized, async (req, re
     res.json({ success: true, data: capabilities, timestamp: new Date().toISOString() });
   } catch (error) {
     console.error('Error getting appliance capabilities:', error.message);
-    res.status(500).json({ 
-      success: false, 
+    res.status(500).json({
+      success: false,
       error: {
         code: 'API_ERROR',
         message: 'Failed to get appliance capabilities',
@@ -263,8 +263,8 @@ app.put('/api/appliances/:id/control', ensureAPIInitialized, async (req, res) =>
     res.json({ success: true, data: result, timestamp: new Date().toISOString() });
   } catch (error) {
     console.error('❌ Error controlling appliance:', error.message);
-    res.status(500).json({ 
-      success: false, 
+    res.status(500).json({
+      success: false,
       error: {
         code: 'CONTROL_ERROR',
         message: 'Failed to control appliance',
@@ -276,9 +276,9 @@ app.put('/api/appliances/:id/control', ensureAPIInitialized, async (req, res) =>
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
-  res.json({ 
-    success: true, 
-    status: 'healthy', 
+  res.json({
+    success: true,
+    status: 'healthy',
     timestamp: new Date().toISOString(),
     version: '1.0.0'
   });
@@ -299,7 +299,7 @@ app.get('/api/token/status', (req, res) => {
   // Check token expiry if API is initialized
   if (electroluxAPI) {
     tokenInfo.isExpired = electroluxAPI.isTokenExpired();
-    
+
     // Try to parse JWT to get expiry info
     try {
       const token = process.env.ELECTROLUX_TOKEN;
@@ -319,7 +319,7 @@ app.get('/api/token/status', (req, res) => {
       console.error('Error parsing token:', e);
     }
   }
-  
+
   res.json({
     success: true,
     data: tokenInfo,
@@ -379,7 +379,7 @@ app.listen(PORT, async () => {
   console.log(`🌟 Electrolux AC Controller Server running on port ${PORT}`);
   console.log(`📱 Web interface: http://localhost:${PORT}`);
   console.log(`🔧 API health check: http://localhost:${PORT}/api/health`);
-  
+
   // Initialize API client with token management
   try {
     await initializeAPI();

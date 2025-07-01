@@ -901,7 +901,7 @@ body {
     font-weight: 500;
 }
 
-.error-container, .success-container {
+.error-container, .success-container, .warning-container {
     position: fixed;
     top: 20px;
     right: 20px;
@@ -912,7 +912,7 @@ body {
     max-width: 400px;
 }
 
-.error-message, .success-message {
+.error-message, .success-message, .warning-message {
     padding: 15px 20px;
     border-radius: 12px;
     display: flex;
@@ -934,6 +934,13 @@ body {
     border-color: #bbf7d0;
     border-left: 4px solid #10b981;
     color: #166534;
+}
+
+.warning-message {
+    background: #fef3c7;
+    border-color: #fde68a;
+    border-left: 4px solid #f59e0b;
+    color: #92400e;
 }
 
 .close-btn {
@@ -1059,7 +1066,7 @@ body {
         text-align: left;
     }
     
-    .error-container, .success-container {
+    .error-container, .success-container, .warning-container {
         left: 15px;
         right: 15px;
         max-width: none;
