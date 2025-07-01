@@ -291,16 +291,19 @@ app.get('/api/token/status', (req, res) => {
     hasRefreshToken: !!process.env.ELECTROLUX_REFRESH_TOKEN,
     apiInitialized: !!electroluxAPI,
     isExpired: false,
+    isRefreshTokenExpired: false,
     expiryTime: null,
     expiresInSeconds: null,
-    expiresInMinutes: null
+    expiresInMinutes: null,
+    refreshTokenExpiryTime: null,
+    refreshTokenExpiresInMinutes: null
   };
 
   // Check token expiry if API is initialized
   if (electroluxAPI) {
     tokenInfo.isExpired = electroluxAPI.isTokenExpired();
 
-    // Try to parse JWT to get expiry info
+    // Try to parse access token JWT to get expiry info
     try {
       const token = process.env.ELECTROLUX_TOKEN;
       if (token) {
@@ -312,11 +315,33 @@ app.get('/api/token/status', (req, res) => {
             const expiresInSeconds = payload.exp - Math.floor(Date.now() / 1000);
             tokenInfo.expiresInSeconds = Math.max(0, expiresInSeconds);
             tokenInfo.expiresInMinutes = Math.max(0, Math.floor(expiresInSeconds / 60));
+            // Double-check isExpired based on actual expiry time
+            tokenInfo.isExpired = expiresInSeconds <= 0;
           }
         }
       }
     } catch (e) {
-      console.error('Error parsing token:', e);
+      console.error('Error parsing access token:', e);
+    }
+
+    // Try to parse refresh token JWT to get expiry info
+    try {
+      const refreshToken = process.env.ELECTROLUX_REFRESH_TOKEN;
+      if (refreshToken) {
+        const tokenParts = refreshToken.split('.');
+        if (tokenParts.length === 3) {
+          const payload = JSON.parse(Buffer.from(tokenParts[1], 'base64').toString());
+          if (payload.exp) {
+            tokenInfo.refreshTokenExpiryTime = new Date(payload.exp * 1000).toISOString();
+            const expiresInSeconds = payload.exp - Math.floor(Date.now() / 1000);
+            tokenInfo.isRefreshTokenExpired = expiresInSeconds <= 0;
+            tokenInfo.refreshTokenExpiresInMinutes = Math.max(0, Math.floor(expiresInSeconds / 60));
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Error parsing refresh token:', e);
+      // Refresh token might not be a JWT, so we can't determine expiry
     }
   }
 

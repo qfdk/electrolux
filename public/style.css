@@ -485,6 +485,13 @@ body {
     margin-bottom: 12px;
 }
 
+.extra-controls {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-top: 25px;
+}
+
 .fan-speed-buttons {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
@@ -544,7 +551,8 @@ body {
     cursor: pointer;
     transition: all 0.3s ease;
     color: #374151;
-    width: fit-content;
+    width: 100%;
+    justify-content: center;
 }
 
 .swing-btn:hover:not(:disabled), .sleep-btn:hover:not(:disabled) {
@@ -905,11 +913,16 @@ body {
     position: fixed;
     top: 20px;
     right: 20px;
-    z-index: 1001;
+    z-index: 2000; /* Increased z-index to ensure messages appear above everything */
     display: flex;
     flex-direction: column;
     gap: 10px;
     max-width: 400px;
+    pointer-events: none; /* Allow clicks to pass through the container */
+}
+
+.error-container > *, .success-container > *, .warning-container > * {
+    pointer-events: auto; /* But allow clicks on the messages themselves */
 }
 
 .error-message, .success-message, .warning-message {
@@ -1095,6 +1108,11 @@ body {
     }
     
     .power-controls {
+        grid-template-columns: 1fr;
+        gap: 15px;
+    }
+    
+    .extra-controls {
         grid-template-columns: 1fr;
         gap: 15px;
     }

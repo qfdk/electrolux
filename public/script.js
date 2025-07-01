@@ -82,7 +82,7 @@ class ElectroluxController {
     });
 
     // Token status refresh
-    document.getElementById('refreshTokenStatus').addEventListener('click', () => {
+    document.getElementById('refreshTokenBtn').addEventListener('click', () => {
       this.refreshTokenStatus();
     });
 
@@ -123,25 +123,35 @@ class ElectroluxController {
         const selectedId = testDevice ? testId : (appliances[0].applianceId || appliances[0].id);
 
         await this.selectAppliance(selectedId);
+        // Success message is shown in selectAppliance method
       } else {
         // If no appliances from API, use test device
         this.useTestDevice();
       }
     } catch (error) {
       console.error('Failed to load appliances:', error);
+      this.hideLoading(); // Hide loading before showing error
       this.showError('加载设备列表失败: ' + error.message);
+      
+      // Update device info to show unknown state
+      this.updateDeviceInfo(null);
+      
+      // Try to use test device as fallback
       this.useTestDevice();
     } finally {
-      this.hideLoading();
+      // Only hide loading if not already hidden in catch block
+      if (document.getElementById('loadingOverlay').style.display !== 'none') {
+        this.hideLoading();
+      }
     }
   }
 
   useTestDevice() {
     // Use the known test device ID
-    this.selectAppliance('950011716506019911110697');
+    this.selectAppliance('950011716506019911110697', true); // Pass flag to indicate fallback
   }
 
-  async selectAppliance(applianceId) {
+  async selectAppliance(applianceId, isFallback = false) {
     if (!applianceId) {
       this.currentApplianceId = null;
       this.disableControls();
@@ -199,8 +209,7 @@ class ElectroluxController {
       }
 
       this.enableControls();
-      this.showSuccess('设备加载成功');
-
+      
       // Ensure power button states are correct after enabling controls
       if (stateResponse.status === 'fulfilled') {
         const stateData = stateResponse.value.data;
@@ -209,12 +218,18 @@ class ElectroluxController {
         const actualPowerState = applianceState?.toLowerCase() === 'off' ? 'off' : 'running';
         this.updatePowerButtons(actualPowerState);
       }
+      
+      this.hideLoading(); // Hide loading before showing success
+      if (!isFallback) {
+        this.showSuccess('设备加载成功');
+      }
     } catch (error) {
       console.error('Failed to select appliance:', error);
+      this.hideLoading(); // Hide loading before showing error
       this.showError('加载设备失败: ' + error.message);
       this.disableControls();
     } finally {
-      this.hideLoading();
+      // Loading already hidden above
     }
   }
 
@@ -1343,7 +1358,18 @@ class ElectroluxController {
 
       this.updateTokenStatusDisplay(tokenData);
 
-      if (showMessage) this.showSuccess('Token状态已更新');
+      if (showMessage) {
+        // Show appropriate message based on token status
+        if (!tokenData.hasAccessToken) {
+          this.showError('访问令牌缺失，请检查.env配置');
+        } else if (tokenData.isExpired) {
+          this.showWarning('访问令牌已过期，请刷新令牌');
+        } else if (tokenData.expiresInMinutes && tokenData.expiresInMinutes < 30) {
+          this.showWarning(`访问令牌即将过期（剩余${tokenData.expiresInMinutes}分钟）`);
+        } else {
+          this.showSuccess('Token状态正常');
+        }
+      }
     } catch (error) {
       console.error('Failed to refresh token status:', error);
       this.updateTokenStatusDisplay(null);
@@ -1354,68 +1380,131 @@ class ElectroluxController {
   }
 
   updateTokenStatusDisplay(tokenData) {
-    console.log(tokenData);
-    const accessTokenStatus = document.getElementById('accessTokenStatus');
-    const tokenTimeLeft = document.getElementById('tokenTimeLeft');
-    const manualRefreshBtn = document.getElementById('manualRefreshToken');
-    const tokenHelp = document.getElementById('tokenHelp');
+    console.log('🔄 Updating token status display...');
+    
+    // Get elements
+    const elements = {
+      accessToken: document.getElementById('accessTokenStatus'),
+      timeLeft: document.getElementById('tokenTimeLeft'),
+      refreshToken: document.getElementById('refreshTokenStatus'),
+      refreshBtn: document.getElementById('manualRefreshToken'),
+      helpSection: document.getElementById('tokenHelp')
+    };
+
+    // Check if elements exist
+    for (const [key, element] of Object.entries(elements)) {
+      if (!element) {
+        console.error(`❌ Element not found: ${key}`);
+        return;
+      }
+    }
 
     if (!tokenData) {
-      // Error state
-      accessTokenStatus.textContent = '检查失败';
-      accessTokenStatus.className = 'token-status invalid';
-
-      tokenTimeLeft.textContent = '未知';
-      tokenTimeLeft.className = 'token-status invalid';
-
-      manualRefreshBtn.disabled = true;
+      this.setTokenStatus(elements.accessToken, '检查失败', 'invalid');
+      this.setTokenStatus(elements.timeLeft, '未知', 'invalid');
+      this.setTokenStatus(elements.refreshToken, '未知', 'invalid');
+      elements.refreshBtn.disabled = true;
       return;
     }
 
-    // Access token status
+    // Update access token status
     if (tokenData.hasAccessToken) {
-      accessTokenStatus.textContent = tokenData.isExpired ? '已过期' : '有效';
-      accessTokenStatus.className = `token-status ${tokenData.isExpired ? 'invalid' : 'valid'}`;
-    } else {
-      accessTokenStatus.textContent = '缺失';
-      accessTokenStatus.className = 'token-status invalid';
-    }
-
-    // Time left
-    if (tokenData.expiresInMinutes !== null) {
-      if (tokenData.expiresInMinutes <= 0) {
-        tokenTimeLeft.textContent = '已过期';
-        tokenTimeLeft.className = 'token-status invalid';
-      } else if (tokenData.expiresInMinutes < 30) {
-        tokenTimeLeft.textContent = `${tokenData.expiresInMinutes}分钟`;
-        tokenTimeLeft.className = 'token-status warning';
+      if (tokenData.isExpired) {
+        this.setTokenStatus(elements.accessToken, '已过期', 'invalid');
       } else {
-        const hours = Math.floor(tokenData.expiresInMinutes / 60);
-        const minutes = tokenData.expiresInMinutes % 60;
-        const timeText = hours > 0 ? `${hours}小时${minutes}分钟` : `${minutes}分钟`;
-        tokenTimeLeft.textContent = timeText;
-        tokenTimeLeft.className = 'token-status valid';
+        this.setTokenStatus(elements.accessToken, '有效', 'valid');
       }
     } else {
-      tokenTimeLeft.textContent = '未知';
-      tokenTimeLeft.className = 'token-status warning';
+      this.setTokenStatus(elements.accessToken, '缺失', 'invalid');
     }
 
-    // Manual refresh button and help
-    manualRefreshBtn.disabled = !tokenData.hasRefreshToken || !tokenData.apiInitialized || tokenData.isRefreshTokenExpired;
+    // Update time left
+    this.updateTimeLeftDisplay(elements.timeLeft, tokenData.expiresInMinutes);
 
-    // Show help if refresh token is missing or expired
-    if (tokenData.hasRefreshToken && !tokenData.isRefreshTokenExpired) {
-      tokenHelp.style.display = 'none';
+    // Update refresh token status
+    this.updateRefreshTokenDisplay(elements.refreshToken, tokenData);
+
+    // Update refresh button state
+    elements.refreshBtn.disabled = !tokenData.hasRefreshToken || 
+                                   !tokenData.apiInitialized || 
+                                   tokenData.isRefreshTokenExpired;
+
+    // Update help section
+    this.updateTokenHelpSection(elements.helpSection, tokenData);
+    
+    console.log('✅ Token status display updated');
+  }
+
+  setTokenStatus(element, text, statusType) {
+    element.textContent = text;
+    element.className = `token-status ${statusType}`;
+    console.log(`📝 Set ${element.id}: "${text}" (${statusType})`);
+  }
+
+  updateTimeLeftDisplay(element, expiresInMinutes) {
+    if (expiresInMinutes === null || expiresInMinutes === undefined) {
+      this.setTokenStatus(element, '未知', 'warning');
+      return;
+    }
+
+    if (expiresInMinutes <= 0) {
+      this.setTokenStatus(element, '已过期', 'invalid');
+    } else if (expiresInMinutes < 30) {
+      this.setTokenStatus(element, `${expiresInMinutes}分钟`, 'warning');
     } else {
-      tokenHelp.style.display = 'block';
+      const hours = Math.floor(expiresInMinutes / 60);
+      const minutes = expiresInMinutes % 60;
+      const timeText = hours > 0 ? `${hours}小时${minutes}分钟` : `${minutes}分钟`;
+      this.setTokenStatus(element, timeText, 'valid');
+    }
+  }
 
-      // Update help message based on the issue
-      const helpText = tokenHelp.querySelector('.help-text p');
-      if (!tokenData.hasRefreshToken) {
-        helpText.textContent = '需要在.env文件中配置ELECTROLUX_REFRESH_TOKEN才能自动刷新访问令牌';
-      } else if (tokenData.isRefreshTokenExpired) {
-        helpText.textContent = '刷新令牌已过期，需要重新获取新的ELECTROLUX_REFRESH_TOKEN';
+  updateRefreshTokenDisplay(element, tokenData) {
+    if (!tokenData.hasRefreshToken) {
+      this.setTokenStatus(element, '缺失', 'invalid');
+      return;
+    }
+
+    if (tokenData.isRefreshTokenExpired) {
+      this.setTokenStatus(element, '已过期', 'invalid');
+      return;
+    }
+
+    if (tokenData.refreshTokenExpiresInMinutes !== null && tokenData.refreshTokenExpiresInMinutes !== undefined) {
+      if (tokenData.refreshTokenExpiresInMinutes <= 0) {
+        this.setTokenStatus(element, '已过期', 'invalid');
+      } else {
+        const days = Math.floor(tokenData.refreshTokenExpiresInMinutes / (60 * 24));
+        const hours = Math.floor((tokenData.refreshTokenExpiresInMinutes % (60 * 24)) / 60);
+        let timeText = '';
+        if (days > 0) {
+          timeText = `${days}天${hours}小时`;
+        } else if (hours > 0) {
+          timeText = `${hours}小时`;
+        } else {
+          timeText = `${tokenData.refreshTokenExpiresInMinutes}分钟`;
+        }
+        this.setTokenStatus(element, `有效 (剩余${timeText})`, 'valid');
+      }
+    } else {
+      this.setTokenStatus(element, '有效', 'valid');
+    }
+  }
+
+  updateTokenHelpSection(helpSection, tokenData) {
+    if (!helpSection) return;
+
+    const shouldShowHelp = !tokenData.hasRefreshToken || tokenData.isRefreshTokenExpired;
+    helpSection.style.display = shouldShowHelp ? 'block' : 'none';
+
+    if (shouldShowHelp) {
+      const helpText = helpSection.querySelector('.help-text p');
+      if (helpText) {
+        if (!tokenData.hasRefreshToken) {
+          helpText.textContent = '需要在.env文件中配置ELECTROLUX_REFRESH_TOKEN才能自动刷新访问令牌';
+        } else if (tokenData.isRefreshTokenExpired) {
+          helpText.textContent = '刷新令牌已过期，需要重新获取新的ELECTROLUX_REFRESH_TOKEN';
+        }
       }
     }
   }
@@ -1502,6 +1591,14 @@ class ElectroluxController {
 
   showMessage(message, type) {
     const container = document.getElementById(`${type}Container`);
+    
+    if (!container) {
+      console.error(`Message container not found: ${type}Container`);
+      return;
+    }
+
+    // Clear any existing messages of the same type
+    container.innerHTML = '';
 
     const messageDiv = document.createElement('div');
     messageDiv.className = `${type}-message`;
@@ -1511,6 +1608,9 @@ class ElectroluxController {
     `;
 
     container.appendChild(messageDiv);
+    
+    // Log message for debugging
+    console.log(`📢 ${type.toUpperCase()} Message:`, message);
 
     // Auto-remove after 5 seconds
     setTimeout(() => {
