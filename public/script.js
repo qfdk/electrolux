@@ -176,7 +176,6 @@ class ElectroluxController {
 
         // Store device capabilities for dynamic UI control
         this.deviceCapabilities = info.capabilities;
-        console.log('Device capabilities loaded:', this.deviceCapabilities);
 
         deviceInfo = {
           applianceName: `${applianceInfo?.brand || 'ELECTROLUX'} ${applianceInfo?.model || '空调'}`,
@@ -488,13 +487,6 @@ class ElectroluxController {
     document.getElementById('lastUpdate').textContent =
       ElectroluxClient.formatTimestamp(new Date().toISOString());
 
-    // Log state changes for debugging (API raw data only)
-    console.log('📊 API State Data:', {
-      mode: properties.mode,
-      applianceState: properties.applianceState,
-      connectionState: state?.connectionState,
-      connectivityState: properties.connectivityState
-    });
   }
 
 
@@ -1609,8 +1601,6 @@ class ElectroluxController {
 
     container.appendChild(messageDiv);
     
-    // Log message for debugging
-    console.log(`📢 ${type.toUpperCase()} Message:`, message);
 
     // Auto-remove after 5 seconds
     setTimeout(() => {
